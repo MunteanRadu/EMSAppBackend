@@ -54,6 +54,14 @@ public class PunchRecordService : IPunchRecordService
         return _mapper.Map<PunchRecordDto?>(pr);
     }
 
+    public async Task<PunchRecord?> GetByIdForUpdateAsync(string id, CancellationToken ct)
+    {
+        var pr = await _repo.GetByIdAsync(id, ct);
+        if (pr is null) return null;
+
+        return pr;
+    }
+
     public Task<IReadOnlyList<PunchRecord>> ListByUserAsync(string userId, CancellationToken ct)
     {
         return _repo.ListByUserAsync(userId, ct);

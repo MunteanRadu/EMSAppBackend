@@ -11,5 +11,5 @@ public record class UpdatePolicyRequest
     public TimeSpan? MaxSingleBreak { get; init; }
     public TimeSpan? MaxTotalBreakPerDay { get; init; }
     public decimal? OvertimeMultiplier { get; init; }
-    public IDictionary<LeaveType, int>? LeaveQuotas { get; init; }
+    //public IDictionary<LeaveType, int>? LeaveQuotas { get; init; }
 }

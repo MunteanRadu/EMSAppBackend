@@ -1,8 +1,7 @@
-﻿using EMSApp.Domain;
+﻿namespace EMSApp.Api;
 
-namespace EMSApp.Api;
-
-public record class UpdatePunchRecordRequest
-{
-    public TimeOnly TimeOut { get; init; }
-}
+public sealed record UpdatePunchRecordRequest(
+     DateOnly Date,
+     TimeOnly TimeIn,
+     TimeOnly TimeOut
+);

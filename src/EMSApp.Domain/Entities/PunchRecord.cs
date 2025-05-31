@@ -1,4 +1,5 @@
 ﻿using EMSApp.Domain.Exceptions;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace EMSApp.Domain;
 
@@ -96,6 +97,27 @@ public class PunchRecord
             return null;
 
         return TotalHours - GetTotalBreakDuration();
+    }
+
+    public void UpdateDate(DateOnly newDate)
+    {
+        if (newDate == default)
+            throw new DomainException("Date must be provided");
+        Date = newDate;
+    }
+
+    public void UpdateTimeIn(TimeOnly newTimeIn)
+    {
+        if (newTimeIn == default)
+            throw new DomainException("Punch-in time must be provided");
+        TimeIn = newTimeIn;
+    }
+
+    public void UpdateTimeOut(TimeOnly newTimeOut)
+    {
+        if (newTimeOut == default)
+            throw new DomainException("Punch-out time must be provided");
+        TimeIn = newTimeOut;
     }
 
     public bool IsComplete() => TimeOut.HasValue;

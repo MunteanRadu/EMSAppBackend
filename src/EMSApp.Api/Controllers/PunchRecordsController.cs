@@ -112,6 +112,24 @@ public class PunchRecordsController : ControllerBase
     }
 
     [Authorize(Roles = "admin,manager")]
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(
+        string id,
+        [FromBody] UpdatePunchRecordRequest req,
+        CancellationToken ct)
+    {
+        var punch = await _service.GetByIdForUpdateAsync(id, ct);
+        if (punch is null) return NotFound();
+
+        if (req.Date != default) punch.UpdateDate(req.Date);
+        if (req.TimeIn != default) punch.UpdateTimeIn(req.TimeIn);
+        if (req.TimeOut!= default) punch.UpdateTimeOut(req.TimeOut);
+
+        await _service.UpdateAsync(punch, ct);
+        return NoContent();
+    }
+
+    [Authorize(Roles = "admin,manager")]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(
         string id,

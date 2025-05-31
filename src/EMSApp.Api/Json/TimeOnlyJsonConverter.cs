@@ -8,4 +8,4 @@ public class TimeOnlyJsonConverter : JsonConverter<TimeOnly>
         => TimeOnly.ParseExact(r.GetString()!, FORMAT);
     public override void Write(Utf8JsonWriter w, TimeOnly v, JsonSerializerOptions _)
         => w.WriteStringValue(v.ToString(FORMAT));
-}
+} 

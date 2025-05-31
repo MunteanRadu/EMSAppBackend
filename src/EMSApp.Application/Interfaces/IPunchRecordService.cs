@@ -6,6 +6,7 @@ public interface IPunchRecordService
 {
     Task<PunchRecord> CreateAsync(string userId, DateOnly date, TimeOnly time, CancellationToken ct);
     Task<PunchRecordDto?> GetByIdAsync(string id, CancellationToken ct);
+    Task<PunchRecord?> GetByIdForUpdateAsync(string id, CancellationToken ct);
     Task<PunchRecordDto> PunchOutAsync(string id, TimeOnly timeOut, CancellationToken ct);
     Task<IReadOnlyList<PunchRecord>> ListByUserAsync(string userId, CancellationToken ct);
     Task<IReadOnlyList<DaySummaryDto>> GetMonthSummaryAsync(string userId, int year, int month, CancellationToken ct);

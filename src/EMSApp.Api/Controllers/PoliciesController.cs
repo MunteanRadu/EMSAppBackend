@@ -53,8 +53,24 @@ public class PoliciesController : ControllerBase
         return _mapper.Map<PolicyDto>(p);
     }
 
+    [Authorize(Roles ="admin")]
+    [HttpPatch("{year}/quotas")]
+    public async Task<IActionResult> UpdateLeaveQuotas(
+        int year,
+        [FromBody] UpdateLeaveQuotasRequest req,
+        CancellationToken ct)
+    {
+        var p = await _svc.GetByYearAsync(year, ct);
+        if (p is null) return NotFound();
+
+        if (req.LeaveQuotas is not null) p.SetLeaveQuotas(req.LeaveQuotas);
+
+        await _svc.UpdateAsync(p, ct);
+        return NoContent();
+    }
+
     [Authorize(Roles = "admin")]
-    [HttpPut("{year:int}")]
+    [HttpPut("{year}")]
     public async Task<IActionResult> Update(
         int year,
         [FromBody] UpdatePolicyRequest req,
@@ -70,7 +86,7 @@ public class PoliciesController : ControllerBase
         if (req.MaxSingleBreak is not null) p.SetBreakRules(req.MaxSingleBreak.Value, p.MaxTotalBreakPerDay);
         if (req.MaxTotalBreakPerDay is not null) p.SetBreakRules(p.MaxSingleBreak, req.MaxTotalBreakPerDay.Value);
         if (req.OvertimeMultiplier is not null) p.SetOvertimeMultiplier(req.OvertimeMultiplier.Value);
-        if (req.LeaveQuotas is not null) p.SetLeaveQuotas(req.LeaveQuotas);
+        //if (req.LeaveQuotas is not null) p.SetLeaveQuotas(req.LeaveQuotas);
 
         await _svc.UpdateAsync(p, ct);
         return NoContent();

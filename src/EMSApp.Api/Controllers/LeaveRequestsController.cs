@@ -113,9 +113,9 @@ public class LeaveRequestsController : ControllerBase
         var lr = await _service.GetByIdAsync(id, ct);
         if (lr is null) return NotFound();
 
-        if (req.Type is not null) lr.UpdateType(req.Type.Value);
-        if (req.StartDate is not null) lr.UpdateStartDate(req.StartDate.Value);
-        if (req.EndDate is not null) lr.UpdateEndDate(req.EndDate.Value);
+        if (req.Type is not null) lr.UpdateType((LeaveType)req.Type);
+        if (req.StartDate is not null) lr.UpdateStartDate((DateOnly)req.StartDate);
+        if (req.EndDate is not null) lr.UpdateEndDate((DateOnly)req.EndDate);
         if (req.Reason is not null) lr.UpdateReason(req.Reason);
 
         await _service.UpdateAsync(lr, ct);
