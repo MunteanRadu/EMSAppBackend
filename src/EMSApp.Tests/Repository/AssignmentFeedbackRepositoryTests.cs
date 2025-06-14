@@ -3,8 +3,10 @@ using EMSApp.Domain;
 using EMSApp.Domain.Exceptions;
 using EMSApp.Infrastructure;
 using EMSApp.Infrastructure.Settings;
+using Microsoft.Extensions.Options;
 using Mongo2Go;
 using MongoDB.Driver;
+using System.Xml.Linq;
 
 namespace EMSApp.Tests;
 
@@ -14,19 +16,19 @@ public class AssignmentFeedbackRepositoryTests : IAsyncLifetime
     private readonly MongoDbRunner _dbRunner;
     private readonly IMongoDbContext _dbContext;
     private readonly AssignmentFeedbackRepository _repo;
-    private static string _dbName = "TestDb";
+    private static string DbName = "TestDb";
 
     public AssignmentFeedbackRepositoryTests()
     {
         _dbRunner = MongoDbRunner.Start();
-
-        var settings = new  DatabaseSettings 
+        var settings = new DatabaseSettings
         {
             ConnectionString = _dbRunner.ConnectionString,
-            DatabaseName = _dbName,
+            DatabaseName = DbName
         };
-
-        _dbContext = new MongoDbContext(settings);
+        var options = Options.Create(settings);
+        var client = new MongoClient(_dbRunner.ConnectionString);
+        _dbContext = new MongoDbContext(client, options);
         _repo = new AssignmentFeedbackRepository(_dbContext);
     }
     public Task DisposeAsync()
@@ -38,7 +40,7 @@ public class AssignmentFeedbackRepositoryTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         var client = new MongoClient(_dbRunner.ConnectionString);
-        var database = client.GetDatabase(_dbName);
+        var database = client.GetDatabase(DbName);
         await database.DropCollectionAsync("AssignmentFeedbacks");
     }
 

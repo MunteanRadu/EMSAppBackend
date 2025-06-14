@@ -1,160 +1,122 @@
-﻿
-using EMSApp.Infrastructure.Settings;
-using EMSApp.Infrastructure;
-using Mongo2Go;
-using MongoDB.Driver;
+﻿using System.Threading;
+using System.Threading.Tasks;
 using EMSApp.Domain.Entities;
 using EMSApp.Domain.Exceptions;
+using EMSApp.Infrastructure;
+using EMSApp.Infrastructure.Settings;
+using Microsoft.Extensions.Options;
+using Mongo2Go;
+using MongoDB.Driver;
+using Xunit;
 
-namespace EMSApp.Tests;
-
-[Trait("Category", "Repository")]
-public class DepartmentRepositoryTests : IAsyncLifetime
+namespace EMSApp.Tests
 {
-    private readonly MongoDbRunner _dbRunner;
-    private readonly IMongoDbContext _dbContext;
-    private readonly DepartmentRepository _repo;
-    private static string _dbName = "TestDb";
-
-    public DepartmentRepositoryTests()
+    [Trait("Category", "Repository")]
+    public class DepartmentRepositoryTests : IAsyncLifetime
     {
-        _dbRunner = MongoDbRunner.Start();
+        private readonly MongoDbRunner _dbRunner;
+        private readonly IMongoDbContext _dbContext;
+        private readonly DepartmentRepository _repo;
+        private const string DbName = "TestDb";
 
-        var settings = new DatabaseSettings
+        public DepartmentRepositoryTests()
         {
-            ConnectionString = _dbRunner.ConnectionString,
-            DatabaseName = _dbName,
-        };
+            _dbRunner = MongoDbRunner.Start();
+            var settings = new DatabaseSettings
+            {
+                ConnectionString = _dbRunner.ConnectionString,
+                DatabaseName = DbName
+            };
+            var options = Options.Create(settings);
+            var client = new MongoClient(_dbRunner.ConnectionString);
+            _dbContext = new MongoDbContext(client, options);
+            _repo = new DepartmentRepository(_dbContext);
+        }
 
-        _dbContext = new MongoDbContext(settings);
-        _repo = new DepartmentRepository(_dbContext);
-    }
-    public Task DisposeAsync()
-    {
-        _dbRunner.Dispose();
-        return Task.CompletedTask;
-    }
+        public Task DisposeAsync()
+        {
+            _dbRunner.Dispose();
+            return Task.CompletedTask;
+        }
 
-    public async Task InitializeAsync()
-    {
-        var client = new MongoClient(_dbRunner.ConnectionString);
-        var database = client.GetDatabase(_dbName);
-        await database.DropCollectionAsync("Departments");
-    }
+        public async Task InitializeAsync()
+        {
+            var client = new MongoClient(_dbRunner.ConnectionString);
+            var db = client.GetDatabase(DbName);
+            await db.DropCollectionAsync("Departments");
+        }
 
-    [Fact]
-    public async Task CreateAndFetch_Department_Works()
-    {
-        // Arrange
-        var d = new Department("dept-1", "manager-1");
+        [Fact]
+        public async Task CreateAndFetch_Department_Works()
+        {
+            var dept = new Department("HR");
+            dept.AssignManager("mgr-1");
 
-        // Act
-        await _repo.CreateAsync(d);
-        var byId = await _repo.GetByIdAsync(d.Id);
-        var list = await _repo.GetAllAsync();
+            await _repo.CreateAsync(dept);
+            var fetched = await _repo.GetByIdAsync(dept.Id);
+            var list = await _repo.GetAllAsync();
 
-        // Assert
-        Assert.NotNull(byId);
-        Assert.NotEmpty(list);
-        Assert.Contains(list, dept => dept.Id == d.Id);
-        Assert.Equal(d.Id, byId.Id);
-        Assert.Equal(d.Name, byId.Name);
-        Assert.Equal(d.ManagerId, byId.ManagerId);
-    }
+            Assert.NotNull(fetched);
+            Assert.Single(list);
+            Assert.Equal(dept.Id, fetched!.Id);
+            Assert.Equal(dept.Name, fetched.Name);
+            Assert.Equal(dept.ManagerId, fetched.ManagerId);
+        }
 
-    [Fact]
-    public async Task GetById_NonExistent_ReturnsNull()
-    {
-        // Arrange
-        var byId = await _repo.GetByIdAsync("dept-1");
+        [Fact]
+        public async Task GetById_NonExistent_ReturnsNull() =>
+            Assert.Null(await _repo.GetByIdAsync("no-id"));
 
-        // Act & Assert
-        Assert.Null(byId);
-    }
+        [Fact]
+        public async Task GetAllAsync_Empty_ReturnsEmptyList() =>
+            Assert.Empty(await _repo.GetAllAsync());
 
-    [Fact]
-    public async Task GetAll_NonExistent_ReturnsEmptyList()
-    {
-        // Arrange
-        var list = await _repo.GetAllAsync();
+        [Fact]
+        public async Task DeleteAsync_Existing_DeletesDepartment()
+        {
+            var dept = new Department("IT");
+            await _repo.CreateAsync(dept);
+            Assert.Single(await _repo.GetAllAsync());
 
-        // Act & Assert
-        Assert.Empty(list);
-    }
+            await _repo.DeleteAsync(dept.Id);
+            Assert.Empty(await _repo.GetAllAsync());
+        }
 
-    [Fact]
-    public async Task DeleteDepartment_Exists_DeletesDepartment()
-    {
-        // Arrange
-        var d = new Department("dept-1", "manager-1");
-        await _repo.CreateAsync(d);
-        Assert.NotEmpty(await _repo.GetAllAsync());
+        [Fact]
+        public async Task DeleteAsync_NonExistent_ThrowsRepositoryException() =>
+            await Assert.ThrowsAsync<RepositoryException>(() =>
+                _repo.DeleteAsync("no-id")
+            );
 
-        // Act
-        await _repo.DeleteAsync(d.Id);
+        [Fact]
+        public async Task UpdateAsync_Existing_UpdatesDepartment()
+        {
+            var dept = new Department("Sales");
+            await _repo.CreateAsync(dept);
 
-        // Assert
-        Assert.Empty(await _repo.GetAllAsync());
-    }
+            dept.AddEmployee("emp-1");
+            await _repo.UpdateAsync(dept);
 
-    [Fact]
-    public async Task DeleteDepartment_NonExistent_ThrowsRepositoryException()
-    {
-        // Arrange
-        var d = new Department("dept-1", "manager-1");
+            var fetched = await _repo.GetByIdAsync(dept.Id);
+            Assert.NotNull(fetched);
+            Assert.Contains("emp-1", fetched!.Employees);
+        }
 
-        // Act & Assert
-        await Assert.ThrowsAsync<RepositoryException>(() =>
-            _repo.DeleteAsync(d.Id)
-        );
-    }
+        [Fact]
+        public async Task UpdateAsync_NonExistent_ThrowsRepositoryException() =>
+            await Assert.ThrowsAsync<RepositoryException>(() =>
+                _repo.UpdateAsync(new Department("NonExistent"))
+            );
 
-    [Fact]
-    public async Task UpdateDepartment_Exists_UpdatesDepartment()
-    {
-        // Arrange
-        var d = new Department("dept-1", "manager-1");
-        Assert.Empty(d.Employees);
-        await _repo.CreateAsync(d);
+        [Fact]
+        public async Task UpdateAsync_Upsert_CreatesWhenMissing()
+        {
+            var dept = new Department("Marketing");
+            Assert.Empty(await _repo.GetAllAsync());
 
-        d.AddEmployee("employee-1");
-        Assert.Contains(d.Employees, e => e == "employee-1");
-
-        // Act
-        await _repo.UpdateAsync(d);
-        var byId = await _repo.GetByIdAsync(d.Id);
-
-        // Assert
-        Assert.NotNull(byId);
-        Assert.Equal(d.Id, byId.Id);
-        Assert.Equal(d.Employees, byId!.Employees);
-    }
-
-    [Fact]
-    public async Task UpdateDepartment_NonExistent_ThrowsRepositoryException()
-    {
-        // Arrange
-        var d = new Department("dept-1", "manager-1");
-
-        // Act & Assert
-        await Assert.ThrowsAsync<RepositoryException>(() =>
-            _repo.UpdateAsync(d)
-        );
-    }
-
-    [Fact]
-    public async Task UpsertDepartment_NonExistent_CreatesDepartment()
-    {
-        // Arrange
-        var d = new Department("dept-1", "manager-1");
-        Assert.Empty(await _repo.GetAllAsync());
-
-        // Act
-        await _repo.UpdateAsync(d, true);
-        var byId = await _repo.GetByIdAsync(d.Id);
-
-        // Assert
-        Assert.NotNull(byId);
-        Assert.Equal(d.Id, byId.Id);
+            await _repo.UpdateAsync(dept, isUpsert: true);
+            var fetched = await _repo.GetByIdAsync(dept.Id);
+            Assert.NotNull(fetched);
+        }
     }
 }

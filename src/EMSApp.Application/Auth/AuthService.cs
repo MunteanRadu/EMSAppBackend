@@ -69,7 +69,8 @@ public class AuthService : IAuthService
             new Claim(JwtRegisteredClaimNames.Sub, user.Id),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new Claim(ClaimTypes.NameIdentifier, user.Username),
-            new Claim(ClaimTypes.Role, user.Role.ToString().ToLowerInvariant())
+            new Claim(ClaimTypes.Role, user.Role.ToString().ToLowerInvariant()),
+            new Claim("departmentId", user.DepartmentId ?? string.Empty)
         };
 
         var key = new SymmetricSecurityKey(

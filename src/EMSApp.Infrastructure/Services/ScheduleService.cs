@@ -11,9 +11,9 @@ public class ScheduleService : IScheduleService
         _repo = repo;
     }
 
-    public async Task<Schedule> CreateAsync(string departmentId, string managerId, DayOfWeek day, TimeOnly startTime, TimeOnly endTime, bool isWorkingDay, CancellationToken ct)
+    public async Task<Schedule> CreateAsync(string departmentId, string managerId, ShiftType shiftType, DayOfWeek day, TimeOnly startTime, TimeOnly endTime, bool isWorkingDay, CancellationToken ct)
     {
-        var schedule = new Schedule(departmentId, managerId, day, startTime, endTime, isWorkingDay);
+        var schedule = new Schedule(departmentId, managerId, shiftType, day, startTime, endTime, isWorkingDay);
         await _repo.CreateAsync(schedule, ct);
         return schedule;
     }
@@ -25,12 +25,12 @@ public class ScheduleService : IScheduleService
 
     public Task<IReadOnlyList<Schedule>> ListByDepartmentAsync(string departmentId, CancellationToken ct)
     {
-        return _repo.ListByDepartmentAsync(departmentId, ct);
+        return _repo.GetByDepartmentAsync(departmentId, ct);
     }
 
     public Task<IReadOnlyList<Schedule>> ListByManagerAsync(string managerId, CancellationToken ct)
     {
-        return _repo.ListByManagerAsync(managerId, ct);
+        return _repo.GetByManagerIdAsync(managerId, ct);
     }
 
     public Task UpdateAsync(Schedule schedule, CancellationToken ct)
@@ -46,21 +46,5 @@ public class ScheduleService : IScheduleService
     public Task<IReadOnlyList<Schedule>> GetAllAsync(CancellationToken ct)
     {
         return _repo.GetAllAsync();
-    }
-
-    public async Task RemoveExceptionAsync(string id, DateOnly exceptionDate, CancellationToken ct)
-    {
-        var schedule = await _repo.GetByIdAsync(id, ct)
-            ?? throw new KeyNotFoundException($"Schedule {id} not found");
-        schedule.RemoveException(exceptionDate);
-        await _repo.UpdateAsync(schedule, true, ct);
-    }
-
-    public async Task AddExceptionAsync(string id, DateOnly exceptionDate, CancellationToken ct)
-    {
-        var schedule = await _repo.GetByIdAsync(id, ct)
-            ?? throw new KeyNotFoundException($"Schedule {id} not found");
-        schedule.AddException(exceptionDate);
-        await _repo.UpdateAsync(schedule, true, ct);
     }
 }

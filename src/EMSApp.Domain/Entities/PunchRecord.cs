@@ -11,7 +11,7 @@ public class PunchRecord
     public TimeOnly TimeIn { get; private set; }
     public TimeOnly? TimeOut { get; private set; }
     public TimeSpan? TotalHours { get; private set; }
-    public List<BreakSession> BreakSessions { get; private set; }
+    public bool IsNonCompliant { get; private set; } = false;
 
     public PunchRecord(string userId, DateOnly date, TimeOnly timeIn)
     {
@@ -33,13 +33,10 @@ public class PunchRecord
         TimeIn = timeIn;
         TimeOut = null;
         TotalHours = null;
-        BreakSessions = new List<BreakSession>();
     }
 
     public void PunchOut(TimeOnly timeOut)
     {
-        if (BreakSessions.Any(bs => !bs.EndTime.HasValue))
-            throw new DomainException("Cannot punch out while a break is still active");
         if (TimeOut.HasValue)
             throw new DomainException("Already punched out");
         if (timeOut == default)
@@ -51,52 +48,12 @@ public class PunchRecord
         TotalHours = timeOut - TimeIn;
     }
 
-    public void AddBreakSession(BreakSession session)
-    {
-        if (session == null)
-            throw new DomainException("Break session cannot be null");
-        if (!session.EndTime.HasValue)
-            throw new DomainException("Break session must be finished");
-        if (TimeOut.HasValue)
-            throw new DomainException("Cannot add break session after punch-out");
-        if (session.StartTime < TimeIn)
-            throw new DomainException("Break session must after punch-in time");
-
-
-        BreakSessions.Add(session);
-    }
-
-    public BreakSession StartBreakSession(TimeOnly startTime)
-    {
-        if (BreakSessions.Any(bs => !bs.EndTime.HasValue))
-            throw new DomainException("There is already an open break.");
-
-        var bs = new BreakSession(this.Id, startTime);
-        BreakSessions.Add(bs);
-        return bs;
-    }
-
-    public void EndBreakSession(string breakSessionId, TimeOnly endTime)
-    {
-        var bs = BreakSessions.SingleOrDefault(x => x.Id == breakSessionId)
-                 ?? throw new DomainException("Break session not found.");
-
-        bs.End(endTime);
-    }
-
-    public TimeSpan GetTotalBreakDuration()
-    {
-        return BreakSessions
-            .Aggregate(TimeSpan.Zero, (acc, b) => acc + (b.Duration ?? TimeSpan.Zero));
-    }
-
-
-    public TimeSpan? GetWorkedTime()
+    public TimeSpan? GetTotalHours()
     {
         if (!TimeOut.HasValue)
             return null;
 
-        return TotalHours - GetTotalBreakDuration();
+        return TotalHours;
     }
 
     public void UpdateDate(DateOnly newDate)
@@ -118,6 +75,11 @@ public class PunchRecord
         if (newTimeOut == default)
             throw new DomainException("Punch-out time must be provided");
         TimeIn = newTimeOut;
+    }
+
+    public void MarkAsNonCompliant()
+    {
+        IsNonCompliant = true;
     }
 
     public bool IsComplete() => TimeOut.HasValue;

@@ -1,175 +1,151 @@
-﻿
+﻿using System.Threading;
+using System.Threading.Tasks;
 using EMSApp.Domain;
 using EMSApp.Domain.Exceptions;
+using EMSApp.Domain.Entities;
 using EMSApp.Infrastructure;
 using EMSApp.Infrastructure.Settings;
+using Microsoft.Extensions.Options;
 using Mongo2Go;
 using MongoDB.Driver;
+using Xunit;
 
-namespace EMSApp.Tests;
-
-[Trait("Category", "Repository")]
-public class BreakSessionRepositoryTests : IAsyncLifetime
+namespace EMSApp.Tests
 {
-    private readonly MongoDbRunner _dbRunner;
-    private readonly IMongoDbContext _dbContext;
-    private readonly BreakSessionRepository _repo;
-    private const string _dbName = "TestDb";
-
-    public BreakSessionRepositoryTests()
+    [Trait("Category", "Repository")]
+    public class BreakSessionRepositoryTests : IAsyncLifetime
     {
-        _dbRunner = MongoDbRunner.Start();
+        private readonly MongoDbRunner _dbRunner;
+        private readonly IMongoDbContext _dbContext;
+        private readonly BreakSessionRepository _repo;
+        private const string DbName = "TestDb";
 
-        var settings = new DatabaseSettings
+        public BreakSessionRepositoryTests()
         {
-            ConnectionString = _dbRunner.ConnectionString,
-            DatabaseName = _dbName
-        };
-        _dbContext = new MongoDbContext(settings);
-        _repo = new BreakSessionRepository(_dbContext);
-    }
+            _dbRunner = MongoDbRunner.Start();
+            var settings = new DatabaseSettings
+            {
+                ConnectionString = _dbRunner.ConnectionString,
+                DatabaseName = DbName
+            };
+            var options = Options.Create(settings);
+            var client = new MongoClient(_dbRunner.ConnectionString);
+            _dbContext = new MongoDbContext(client, options);
+            _repo = new BreakSessionRepository(_dbContext);
+        }
 
-    public Task DisposeAsync()
-    {
-        _dbRunner.Dispose();
-        return Task.CompletedTask;
-    }
+        public Task DisposeAsync()
+        {
+            _dbRunner.Dispose();
+            return Task.CompletedTask;
+        }
 
-    public async Task InitializeAsync()
-    {
-        var client = new MongoClient(_dbRunner.ConnectionString);
-        var database = client.GetDatabase(_dbName);
-        await database.DropCollectionAsync("Breaks");
-    }
+        public async Task InitializeAsync()
+        {
+            var client = new MongoClient(_dbRunner.ConnectionString);
+            var db = client.GetDatabase(DbName);
+            await db.DropCollectionAsync("Breaks");
+        }
 
-    [Fact]
-    public async Task CreateAndFetch_BreakSession_Works()
-    {
-        // Arrange
-        var b = new BreakSession("punch-1", TimeOnly.FromDateTime(DateTime.UtcNow));
+        [Fact]
+        public async Task CreateAndFetch_BreakSession_Works()
+        {
+            var start = new TimeOnly(12, 0);
+            var session = new BreakSession("p1", start);
 
-        // Act
-        await _repo.CreateAsync(b);
-        var byId = await _repo.GetByIdAsync(b.Id);
+            await _repo.CreateAsync(session);
+            var fetched = await _repo.GetByIdAsync(session.Id);
 
-        // Assert
-        Assert.NotNull(byId);
-        Assert.Equal(byId.Id, b.Id);
-        Assert.Equal(byId.PunchRecordId, b.PunchRecordId);
-        Assert.Equal(byId.StartTime, b.StartTime);
-    }
+            Assert.NotNull(fetched);
+            Assert.Equal(session.Id, fetched!.Id);
+            Assert.Equal(session.PunchRecordId, fetched.PunchRecordId);
+            Assert.Equal(session.StartTime, fetched.StartTime);
+        }
 
-    [Fact]
-    public async Task GetById_NonExistent_ReturnsNull()
-    {
-        // Arrange & Act
-        var byId = await _repo.GetByIdAsync("nonexistent");
+        [Fact]
+        public async Task GetById_NonExistent_ReturnsNull() =>
+            Assert.Null(await _repo.GetByIdAsync("nope"));
 
-        // Assert
-        Assert.Null(byId);
-    }
+        [Fact]
+        public async Task ListByPunchRecordAsync_FiltersCorrectly()
+        {
+            var start = new TimeOnly(13, 0);
+            var b1 = new BreakSession("p1", start);
+            var b2 = new BreakSession("p2", start);
+            await _repo.CreateAsync(b1);
+            await _repo.CreateAsync(b2);
 
-    [Fact]
-    public async Task ListByPunchId_ReturnsBreakSessions()
-    {
-        // Arrange
-        var b1 = new BreakSession("punch-1", TimeOnly.FromDateTime(DateTime.UtcNow));
-        var b2 = new BreakSession("punch-2", TimeOnly.FromDateTime(DateTime.UtcNow));
-        await _repo.CreateAsync(b1);
-        await _repo.CreateAsync(b2);
+            var list = await _repo.ListByPunchRecordAsync("p1");
+            Assert.Single(list);
+            Assert.Equal(b1.Id, list[0].Id);
+        }
 
-        // Act
-        var list = await _repo.ListByPunchRecordAsync("punch-1");
+        [Fact]
+        public async Task ListByPunchRecordAsync_NonExistent_ReturnsEmptyList() =>
+            Assert.Empty(await _repo.ListByPunchRecordAsync("none"));
 
-        // Assert
-        Assert.NotEmpty(list);
-        Assert.Single(list);
-        Assert.Contains(list, b => b.Id == b1.Id);
-        Assert.DoesNotContain(list, b => b.Id == b2.Id);
-    }
+        [Fact]
+        public async Task DeleteAsync_Existing_DeletesBreakSession()
+        {
+            var start = new TimeOnly(14, 0);
+            var b = new BreakSession("p1", start);
+            await _repo.CreateAsync(b);
+            Assert.Single(await _repo.ListByPunchRecordAsync("p1"));
 
-    [Fact]
-    public async Task ListByPunchId_NonExistent_ReturnsEmptyList()
-    {
-        // Arrange & Act
-        var got = await _repo.ListByPunchRecordAsync("fakepunch");
+            await _repo.DeleteAsync(b.Id);
+            Assert.Empty(await _repo.ListByPunchRecordAsync("p1"));
+        }
 
-        // Assert
-        Assert.Empty(got);
-    }
+        [Fact]
+        public async Task DeleteAsync_NonExistent_ThrowsRepositoryException() =>
+            await Assert.ThrowsAsync<RepositoryException>(() => _repo.DeleteAsync("nope"));
 
-    [Fact]
-    public async Task DeleteBreakSession_Exists_DeletesBreakSession()
-    {
-        // Arrange
-        var b = new BreakSession("punch-1", TimeOnly.FromDateTime(DateTime.UtcNow));
-        await _repo.CreateAsync(b);
+        [Fact]
+        public async Task UpdateAsync_Existing_UpdatesBreakSession()
+        {
+            var start = new TimeOnly(15, 0);
+            var session = new BreakSession("p1", start);
+            await _repo.CreateAsync(session);
+            var end = start.AddMinutes(30);
+            session.End(end);
 
-        // Act & Assert
-        Assert.NotEmpty(await _repo.ListByPunchRecordAsync("punch-1"));
-        await _repo.DeleteAsync(b.Id);
-        Assert.Empty(await _repo.ListByPunchRecordAsync("punch-1"));
-    }
+            await _repo.UpdateAsync(session);
+            var fetched = await _repo.GetByIdAsync(session.Id);
 
-    [Fact]
-    public async Task DeleteBreakSession_NonExistent_ThrowsRepositoryException()
-    {
-        // Arrange
-        var b = new BreakSession("punch-1", TimeOnly.FromDateTime(DateTime.UtcNow));
+            Assert.NotNull(fetched);
+            Assert.Equal(end, fetched!.EndTime);
+            Assert.Equal(session.Duration, fetched.Duration);
+        }
 
-        // Act & Assert
-        await Assert.ThrowsAsync<RepositoryException>(() => 
-            _repo.DeleteAsync(b.Id)
-        );
-    }
+        [Fact]
+        public async Task UpdateAsync_NonExistent_ThrowsRepositoryException() =>
+            await Assert.ThrowsAsync<RepositoryException>(() => _repo.UpdateAsync(
+                new BreakSession("p1", new TimeOnly(16, 0))
+            ));
 
-    [Fact]
-    public async Task UpdateBreakSession_Exists_DeletesBreakSession()
-    {
-        // Arrange
-        var start = TimeOnly.FromDateTime(DateTime.UtcNow);
-        var b = new BreakSession("punch-1", start);
-        await _repo.CreateAsync(b);
+        [Fact]
+        public async Task UpdateAsync_Upsert_CreatesWhenMissing()
+        {
+            var start = new TimeOnly(17, 0);
+            var session = new BreakSession("p1", start);
+            Assert.Empty(await _repo.ListByPunchRecordAsync("p1"));
 
-        Assert.Null(b.EndTime);
+            await _repo.UpdateAsync(session, isUpsert: true);
+            Assert.Single(await _repo.ListByPunchRecordAsync("p1"));
+        }
 
-        var newEnd = start.AddMinutes(15);
-        b.End(newEnd);
+        [Fact]
+        public async Task GetAllAsync_ReturnsAllBreakSessions()
+        {
+            var start = new TimeOnly(18, 0);
+            var b1 = new BreakSession("p1", start);
+            var b2 = new BreakSession("p2", start);
+            await _repo.CreateAsync(b1);
+            await _repo.CreateAsync(b2);
 
-        // Act
-        await _repo.UpdateAsync(b);
-        var byId = await _repo.GetByIdAsync(b.Id);
-
-        // Assert
-        Assert.Equal(b.Id, byId?.Id);
-        Assert.Equal(newEnd, b.EndTime);
-    }
-
-    [Fact]
-    public async Task UpdateBreakSession_NonExistent_ThrowsRepositoryException()
-    {
-        // Arrange
-        var b = new BreakSession("punch-1", TimeOnly.FromDateTime(DateTime.UtcNow));
-
-        // Act & Assert
-        await Assert.ThrowsAsync<RepositoryException>(() => 
-            _repo.UpdateAsync(b)
-        );
-    }
-
-    [Fact]
-    public async Task UpsertBreakSession_NonExistent_CreatesBreakSession()
-    {
-        // Arrange
-        var b = new BreakSession("punch-1", TimeOnly.FromDateTime(DateTime.UtcNow));
-        Assert.Empty(await _repo.ListByPunchRecordAsync("punch-1"));
-
-        // Act 
-        await _repo.UpdateAsync(b, true);
-        var byId = await _repo.GetByIdAsync(b.Id);
-
-        // Assert
-        Assert.NotEmpty(await _repo.ListByPunchRecordAsync("punch-1"));
-        Assert.Equal(b.Id, byId?.Id);
+            var all = await _repo.GetAllAsync(CancellationToken.None);
+            Assert.Contains(all, x => x.Id == b1.Id);
+            Assert.Contains(all, x => x.Id == b2.Id);
+        }
     }
 }

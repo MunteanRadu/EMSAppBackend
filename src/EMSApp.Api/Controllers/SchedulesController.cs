@@ -27,6 +27,7 @@ public class SchedulesController : ControllerBase
         var s = await _service.CreateAsync(
             req.DepartmentId,
             req.ManagerId,
+            req.ShiftType,
             req.Day,
             req.StartTime,
             req.EndTime,
@@ -77,9 +78,10 @@ public class SchedulesController : ControllerBase
         var s = await _service.GetByIdAsync(id, ct);
         if (s is null) return NotFound();
 
-        if (req.StartTime is not null) s.UpdateShift(req.StartTime.Value, s.EndTime, s.IsWorkingDay);
-        if (req.EndTime is not null) s.UpdateShift(s.StartTime, req.EndTime.Value, s.IsWorkingDay);
-        if (req.IsWorkingDay is not null) s.UpdateShift(s.StartTime, s.EndTime, req.IsWorkingDay.Value);
+        if (req.StartTime is not null) s.UpdateShift(s.ShiftType, req.StartTime.Value, s.EndTime, s.IsWorkingDay);
+        if (req.EndTime is not null) s.UpdateShift(s.ShiftType, s.StartTime, req.EndTime.Value, s.IsWorkingDay);
+        if (!Enum.IsDefined(req.ShiftType)) s.UpdateShift(req.ShiftType, s.StartTime, s.EndTime, s.IsWorkingDay);
+        if (req.IsWorkingDay is not null) s.UpdateShift(s.ShiftType, s.StartTime, s.EndTime, req.IsWorkingDay.Value);
 
         await _service.UpdateAsync(s, ct);
         return NoContent();
@@ -92,28 +94,6 @@ public class SchedulesController : ControllerBase
         CancellationToken ct)
     {
         await _service.DeleteAsync(id, ct);
-        return NoContent();
-    }
-
-    [Authorize(Roles = "admin,manager")]
-    [HttpPost("{id}/exceptions")]
-    public async Task<IActionResult> AddException(
-        string id,
-        [FromBody] AddScheduleExceptionRequest req,
-        CancellationToken ct)
-    {
-        await _service.AddExceptionAsync(id, req.ExceptionDate, ct);
-        return NoContent();
-    }
-
-    [Authorize(Roles = "admin,manager")]
-    [HttpDelete("{id}/exceptions")]
-    public async Task<IActionResult> RemoveException(
-        string id,
-        [FromBody] RemoveScheduleExceptionRequest req,
-        CancellationToken ct)
-    {
-        await _service.RemoveExceptionAsync(id, req.ExceptionDate, ct);
         return NoContent();
     }
 }

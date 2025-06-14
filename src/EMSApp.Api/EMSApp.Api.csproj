@@ -8,6 +8,11 @@
 
   <ItemGroup>
     <Compile Remove="Controllers\UserProfilesController.cs" />
+    <Compile Remove="Mapping\AssemblyInfo.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Remove="secrets.json" />
   </ItemGroup>
 
   <ItemGroup>
@@ -16,6 +21,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication" Version="2.3.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.3" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="OpenAI" Version="2.1.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.10.0" />
 	<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />

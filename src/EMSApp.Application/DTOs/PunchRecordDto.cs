@@ -7,5 +7,5 @@ public sealed record PunchRecordDto(
     TimeOnly TimeIn,
     TimeOnly? TimeOut,
     TimeSpan? TotalHours,
-    List<BreakSessionDto> BreakSessions
+    bool IsNonCompliant
 );

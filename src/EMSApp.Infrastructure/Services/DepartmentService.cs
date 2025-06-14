@@ -7,9 +7,11 @@ namespace EMSApp.Infrastructure;
 public class DepartmentService : IDepartmentService
 {
     private readonly IDepartmentRepository _repo;
-    public DepartmentService(IDepartmentRepository repo)
+    private readonly IUserRepository _userRepository;
+    public DepartmentService(IDepartmentRepository repo, IUserRepository userRepository)
     {
         _repo = repo;
+        _userRepository = userRepository;
     }
 
     public async Task<Department> CreateAsync(string name, CancellationToken ct)
@@ -34,21 +36,39 @@ public class DepartmentService : IDepartmentService
         return _repo.UpdateAsync(department, false, ct);
     }
 
-    public Task DeleteAsync(string id, CancellationToken ct)
+    public async Task DeleteAsync(string id, CancellationToken ct)
     {
-        return _repo.DeleteAsync(id, ct);
+        var deptEmployees = await _userRepository.ListByDepartmentAsync(id, ct);
+        foreach (var user in deptEmployees)
+        {
+            user.UpdateDepartment("");
+            await _userRepository.UpdateAsync(user, true, ct);
+        }
+
+        await _repo.DeleteAsync(id, ct);
     }
 
     public async Task AddEmployeeAsync(string id, string userId, CancellationToken ct)
     {
+        var user = await _userRepository.GetByIdAsync(userId, ct)
+            ?? throw new KeyNotFoundException($"User {userId} not found");
+        user.UpdateDepartment(id);
+        await _userRepository.UpdateAsync(user, true, ct);
+
         var department = await _repo.GetByIdAsync(id, ct)
             ?? throw new KeyNotFoundException($"Department {id} not found");
         department.AddEmployee(userId);
+        
         await _repo.UpdateAsync(department, false, ct);
     }
 
     public async Task RemoveEmployeeAsync(string id, string userId, CancellationToken ct)
     {
+        var user = await _userRepository.GetByIdAsync(userId, ct)
+            ?? throw new KeyNotFoundException($"User {userId} not found");
+        user.UpdateDepartment("");
+        await _userRepository.UpdateAsync(user, true, ct);
+
         var department = await _repo.GetByIdAsync(id, ct)
             ?? throw new KeyNotFoundException($"Department {id} not found");
         department.RemoveEmployee(userId);

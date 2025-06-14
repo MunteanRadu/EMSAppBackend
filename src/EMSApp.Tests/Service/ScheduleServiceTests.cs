@@ -1,150 +1,145 @@
-﻿using EMSApp.Application;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using EMSApp.Application;
 using EMSApp.Domain;
+using EMSApp.Domain.Entities;
 using EMSApp.Infrastructure;
 using Moq;
+using Xunit;
 
-namespace EMSApp.Tests;
-
-[Trait("Category", "Service")]
-public class ScheduleServiceTests
+namespace EMSApp.Tests
 {
-    private readonly Mock<IScheduleRepository> _repo;
-    private readonly IScheduleService _service;
-    private CancellationToken _ct = CancellationToken.None;
-
-    public ScheduleServiceTests()
+    [Trait("Category", "Service")]
+    public class ScheduleServiceTests
     {
-        _repo = new Mock<IScheduleRepository>();
-        _service = new ScheduleService(_repo.Object);
-    }
+        private readonly Mock<IScheduleRepository> _repoMock;
+        private readonly IScheduleService _service;
+        private readonly CancellationToken _ct = CancellationToken.None;
 
-    [Fact]
-    public async Task CreateAsync_ValidData_CreatesAndReturns()
-    {
-        // Arrange
-        var departmentId = "dept-1";
-        var managerId = "manager-1";
-        var day = DayOfWeek.Monday;
-        var startTime = TimeOnly.Parse("08:00");
-        var endTime = startTime.AddHours(8);
-        var isWorkingDay = true;
-
-        // Act
-        var result = await _service.CreateAsync(departmentId, managerId, day, startTime, endTime, isWorkingDay, _ct);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(departmentId, result.DepartmentId);
-        Assert.Equal(managerId, result.ManagerId);
-        Assert.Equal(startTime, result.StartTime);
-        Assert.Equal(endTime, result.EndTime);
-        Assert.Equal(isWorkingDay, result.IsWorkingDay);
-
-        _repo.Verify(r => r.CreateAsync(
-            It.Is<Schedule>(s =>
-                s.DepartmentId == departmentId &&
-                s.ManagerId == managerId &&
-                s.StartTime == startTime &&
-                s.EndTime == endTime &&
-                s.IsWorkingDay == isWorkingDay),
-            _ct),
-            Times.Once);
-    }
-
-    [Fact]
-    public async Task GetByIdAsync_RepoReturnsEntity_ServiceReturnsSame()
-    {
-        // Arrange
-        var startTime = TimeOnly.Parse("08:00");
-        var endTime = startTime.AddHours(8);
-        var s = new Schedule("d1", "m1", DayOfWeek.Monday, startTime, endTime, true);
-        _repo.Setup(r => r.GetByIdAsync(s.Id, _ct)).ReturnsAsync(s);
-
-        // Act
-        var result = await _service.GetByIdAsync(s.Id, _ct);
-
-        // Assert
-        Assert.Same(s, result);
-        _repo.Verify(r => r.GetByIdAsync(s.Id, _ct), Times.Once);
-    }
-
-    [Fact]
-    public async Task GetByIdAsync_NotFound_ReturnsNull()
-    {
-        // Arrange
-        _repo.Setup(r => r.GetByIdAsync("noid", _ct)).ReturnsAsync((Schedule?)null);
-
-        // Act
-        var result = await _service.GetByIdAsync("noid", _ct);
-
-        // Assert
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public async Task ListByDepartmentAsync_RepoReturnsList_ServiceReturnsSame()
-    {
-        // Arrange
-        var startTime = TimeOnly.Parse("08:00");
-        var endTime = startTime.AddHours(8);
-        var list = new List<Schedule>
+        public ScheduleServiceTests()
         {
-            new Schedule("d1", "m1", DayOfWeek.Monday, startTime, endTime, true),
-            new Schedule("d1", "m2", DayOfWeek.Wednesday, startTime, endTime, true),
-        };
-        _repo.Setup(r => r.ListByDepartmentAsync("d1", _ct)).ReturnsAsync(list);
+            _repoMock = new Mock<IScheduleRepository>();
+            _service = new ScheduleService(_repoMock.Object);
+        }
 
-        // Act
-        var result = await _service.ListByDepartmentAsync("d1", _ct);
-
-        // Assert
-        Assert.Same(list, result);
-        _repo.Verify(r => r.ListByDepartmentAsync("d1", _ct), Times.Once);
-    }
-
-    [Fact]
-    public async Task ListByManagerAsync_RepoReturnsList_ServiceReturnsSame()
-    {
-        // Arrange
-        var startTime = TimeOnly.Parse("08:00");
-        var endTime = startTime.AddHours(8);
-        var list = new List<Schedule>
+        [Fact]
+        public async Task CreateAsync_ValidData_CreatesScheduleAndCallsRepo()
         {
-            new Schedule("d2", "m1", DayOfWeek.Monday, startTime, endTime, true),
-            new Schedule("d1", "m1", DayOfWeek.Wednesday, startTime, endTime, true),
-        };
-        _repo.Setup(r => r.ListByManagerAsync("m1", _ct)).ReturnsAsync(list);
+            // Arrange
+            var deptId = "dept1";
+            var mgrId = "mgr1";
+            var shift = ShiftType.Shift1;
+            var day = DayOfWeek.Tuesday;
+            var start = new TimeOnly(7, 0);
+            var end = new TimeOnly(15, 0);
+            var isWork = true;
 
-        // Act
-        var result = await _service.ListByManagerAsync("m1", _ct);
+            // Act
+            var schedule = await _service.CreateAsync(deptId, mgrId, shift, day, start, end, isWork, _ct);
 
-        // Assert
-        Assert.Same(list, result);
-        _repo.Verify(r => r.ListByManagerAsync("m1", _ct), Times.Once);
-    }
+            // Assert
+            Assert.NotNull(schedule);
+            Assert.Equal(deptId, schedule.DepartmentId);
+            Assert.Equal(mgrId, schedule.ManagerId);
+            Assert.Equal(shift, schedule.ShiftType);
+            Assert.Equal(day, schedule.Day);
+            Assert.Equal(start, schedule.StartTime);
+            Assert.Equal(end, schedule.EndTime);
+            Assert.Equal(isWork, schedule.IsWorkingDay);
 
-    [Fact]
-    public async Task UpdateAsync_CallsRepository()
-    {
-        // Arrange
-        var startTime = TimeOnly.Parse("08:00");
-        var endTime = startTime.AddHours(8);
-        var s = new Schedule("d1", "m1", DayOfWeek.Monday, startTime, endTime, true);
+            _repoMock.Verify(r => r.CreateAsync(
+                It.Is<Schedule>(s =>
+                    s.DepartmentId == deptId &&
+                    s.ManagerId == mgrId &&
+                    s.ShiftType == shift &&
+                    s.Day == day &&
+                    s.StartTime == start &&
+                    s.EndTime == end &&
+                    s.IsWorkingDay == isWork
+                ), _ct),
+                Times.Once
+            );
+        }
 
-        // Act
-        await _service.UpdateAsync(s, _ct);
+        [Fact]
+        public async Task GetByIdAsync_Existing_ReturnsSameSchedule()
+        {
+            // Arrange
+            var schedule = new Schedule("d", "m", ShiftType.Shift2, DayOfWeek.Friday, new TimeOnly(9, 0), new TimeOnly(17, 0), true);
+            _repoMock.Setup(r => r.GetByIdAsync(schedule.Id, _ct)).ReturnsAsync(schedule);
 
-        // Assert
-        _repo.Verify(r => r.UpdateAsync(s, false, _ct), Times.Once);
-    }
+            // Act
+            var result = await _service.GetByIdAsync(schedule.Id, _ct);
 
-    [Fact]
-    public async Task DeleteAsync_CallsRepository()
-    {
-        // Act
-        await _service.DeleteAsync("s-1", _ct);
+            // Assert
+            Assert.Same(schedule, result);
+            _repoMock.Verify(r => r.GetByIdAsync(schedule.Id, _ct), Times.Once);
+        }
 
-        // Assert
-        _repo.Verify(r => r.DeleteAsync("s-1", _ct), Times.Once);
+        [Fact]
+        public async Task GetByIdAsync_NonExistent_ReturnsNull()
+        {
+            _repoMock.Setup(r => r.GetByIdAsync("no-id", _ct)).ReturnsAsync((Schedule?)null);
+
+            var result = await _service.GetByIdAsync("no-id", _ct);
+
+            Assert.Null(result);
+        }
+
+        [Fact]
+        public async Task ListByDepartmentAsync_ForwardsCall()
+        {
+            var list = new List<Schedule>();
+            _repoMock.Setup(r => r.GetByDepartmentAsync("deptX", _ct)).ReturnsAsync(list);
+
+            var result = await _service.ListByDepartmentAsync("deptX", _ct);
+
+            Assert.Same(list, result);
+            _repoMock.Verify(r => r.GetByDepartmentAsync("deptX", _ct), Times.Once);
+        }
+
+        [Fact]
+        public async Task ListByManagerAsync_ForwardsCall()
+        {
+            var list = new List<Schedule>();
+            _repoMock.Setup(r => r.GetByManagerIdAsync("mgrX", _ct)).ReturnsAsync(list);
+
+            var result = await _service.ListByManagerAsync("mgrX", _ct);
+
+            Assert.Same(list, result);
+            _repoMock.Verify(r => r.GetByManagerIdAsync("mgrX", _ct), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetAllAsync_ForwardsCall()
+        {
+            var list = new List<Schedule>();
+            _repoMock.Setup(r => r.GetAllAsync(_ct)).ReturnsAsync(list);
+
+            var result = await _service.GetAllAsync(_ct);
+
+            Assert.Same(list, result);
+            _repoMock.Verify(r => r.GetAllAsync(_ct), Times.Once);
+        }
+
+        [Fact]
+        public async Task UpdateAsync_CallsRepositoryWithUpsertFalse()
+        {
+            var sched = new Schedule("d", "m", ShiftType.Shift2, DayOfWeek.Sunday, new TimeOnly(16, 0), new TimeOnly(23, 0), false);
+
+            await _service.UpdateAsync(sched, _ct);
+
+            _repoMock.Verify(r => r.UpdateAsync(sched, false, _ct), Times.Once);
+        }
+
+        [Fact]
+        public async Task DeleteAsync_CallsRepository()
+        {
+            await _service.DeleteAsync("sched-1", _ct);
+
+            _repoMock.Verify(r => r.DeleteAsync("sched-1", _ct), Times.Once);
+        }
     }
 }

@@ -43,10 +43,6 @@ public class User
         if (passwordHash.Length > 256)
             throw new DomainException("Password too long");
 
-        // DepartmentId validation
-        if (string.IsNullOrWhiteSpace(departmentId))
-            throw new DomainException("DepartmentId Id cannot be empty");
-
         Id = Guid.NewGuid().ToString();
         Email = email.Trim();
         Username = username.Trim();

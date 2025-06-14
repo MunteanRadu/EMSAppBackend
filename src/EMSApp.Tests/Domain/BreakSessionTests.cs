@@ -1,149 +1,116 @@
-﻿using EMSApp.Domain;
+﻿using System;
+using EMSApp.Domain;
 using EMSApp.Domain.Exceptions;
+using Xunit;
 
-namespace EMSApp.Tests;
-
-[Trait("Category", "Domain")]
-public class BreakSessionTests
+namespace EMSApp.Tests
 {
-    /// <summary>
-    /// Shared test helper
-    /// </summary>
-    /// <param name="act"></param>
-    /// <param name="expectedMessage"></param>
-    private static void AssertThrowsBreakSessionException(Action act, string expectedMessage)
+    [Trait("Category", "Domain")]
+    public class BreakSessionTests
     {
-        var ex = Assert.Throws<DomainException>(act);
-        Assert.Contains(expectedMessage, ex.Message);
-    }
+        private static void AssertThrowsBreakSessionException(Action act, string expectedMessage)
+        {
+            var ex = Assert.Throws<DomainException>(act);
+            Assert.Contains(expectedMessage, ex.Message);
+        }
 
-    /// <summary>
-    /// Creates a valid BreakSession
-    /// </summary>
-    /// <returns></returns>
-    private static BreakSession CreateValidBreakSession()
-    {
-        var session = new BreakSession("punch-123", new TimeOnly(12, 0));
-        session.End(new TimeOnly(12, 30));
-        return session;
-    }
+        private static BreakSession CreateValidBreakSession()
+        {
+            var session = new BreakSession("punch-123", new TimeOnly(12, 0));
+            session.End(new TimeOnly(12, 30));
+            return session;
+        }
 
-    /// <summary>
-    /// Generates valid parameters for BreakSession
-    /// </summary>
-    /// <returns></returns>
-    private static (string punchRecordId, TimeOnly start, TimeOnly end, TimeSpan duration) GetValidParameters()
-        => ("punch-123", new TimeOnly(12, 0), new TimeOnly(12, 30), new TimeSpan(0, 30, 0));
+        [Fact]
+        public void Constructor_ValidParameters_CreatesBreakSession()
+        {
+            // Arrange
+            var sessionId = "punch-123";
+            var start = new TimeOnly(12, 0);
+            var end = new TimeOnly(12, 30);
 
-    public static IEnumerable<object[]> InvalidEndTimes =>
-    [
-        [default(TimeOnly), "EndTime time must be provided"],
-        [new TimeOnly(11, 0), "EndTime time must be after start time"],
-    ];
+            // Act
+            var session = new BreakSession(sessionId, start);
 
-    /// CONSTRUCTOR TESTS
+            // Pre-assert
+            Assert.False(session.IsComplete());
+            Assert.Null(session.EndTime);
+            Assert.Null(session.Duration);
 
-    [Fact]
-    public void Constructor_ValidParameters_CreatesBreakSession()
-    {
-        // Arrange
-        var valid = GetValidParameters();
+            // Finish session
+            session.End(end);
 
-        // Act & PreAssert
-        var session = new BreakSession(valid.punchRecordId, valid.start);
-        Assert.False(session.IsComplete());
-        Assert.Null(session.EndTime);
-        Assert.Null(session.Duration);
-        session.End(valid.end);
+            // Assert
+            Assert.Equal(sessionId, session.PunchRecordId);
+            Assert.Equal(start, session.StartTime);
+            Assert.Equal(end, session.EndTime);
+            Assert.Equal(TimeSpan.FromMinutes(30), session.Duration);
+            Assert.True(session.IsComplete());
+        }
 
-        // Assert
-        Assert.Equal(valid.punchRecordId, session.PunchRecordId);
-        Assert.Equal(valid.start, session.StartTime);
-        Assert.Equal(valid.end, session.EndTime);
-        Assert.Equal(valid.duration, session.Duration);
-        Assert.True(session.IsComplete());
-    }
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public void Constructor_InvalidPunchRecordId_ThrowsDomainException(string badId)
+        {
+            var time = new TimeOnly(12, 0);
+            AssertThrowsBreakSessionException(
+                () => new BreakSession(badId, time),
+                "Punch Record Id cannot be empty"
+            );
+        }
 
-    // PunchRecordId validation
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Constructor_InvalidPunchRecordId_ThrowsDomainException(string badPunchId)
-    {
-        // Arrange
-        var valid = GetValidParameters();
+        [Theory]
+        [InlineData(default, "StartTime time must be provided")]
+        public void Constructor_InvalidStartTime_ThrowsDomainException(TimeOnly badTime, string expectedMessage)
+        {
+            AssertThrowsBreakSessionException(
+                () => new BreakSession("punch-123", badTime),
+                expectedMessage
+            );
+        }
 
-        // Act & Assert
-        var ex = Assert.Throws<DomainException>(() => 
-            new BreakSession(badPunchId, valid.start)
-        );
-        Assert.Contains("Punch Record Id cannot be empty", ex.Message);
-    }
+        [Fact]
+        public void EndBreak_ValidData_EndsBreak()
+        {
+            // Arrange
+            var session = new BreakSession("punch-123", new TimeOnly(12, 0));
+            var end = new TimeOnly(12, 30);
 
-    // StartTime time validation
-    [Theory]
-    [InlineData(default, "StartTime time must be provided")]
-    public void Constructor_InvalidStartTime_ThrowsDomainException(TimeOnly badTime, string expectedMessage)
-    {
-        // Arrange
-        var valid = GetValidParameters();
+            // Act
+            session.End(end);
 
-        // Act & Assert
-        AssertThrowsBreakSessionException(() => 
-            new BreakSession(valid.punchRecordId, badTime),
-            expectedMessage
-        );
-    }
+            // Assert
+            Assert.Equal(end, session.EndTime);
+            Assert.Equal(TimeSpan.FromMinutes(30), session.Duration);
+            Assert.True(session.IsComplete());
+        }
 
-    /// METHODS TESTS
+        [Fact]
+        public void EndBreak_BreakAlreadyEnded_ThrowsDomainException()
+        {
+            // Arrange
+            var session = CreateValidBreakSession();
+            var end = session.EndTime.Value;
 
-    // End - valid
-    [Fact]
-    public void EndBreak_ValidData_EndsBreak()
-    {
-        // Arrange
-        var valid = GetValidParameters();
-        var session = new BreakSession(valid.punchRecordId, valid.start);
+            // Act & Assert
+            var ex = Assert.Throws<DomainException>(() => session.End(end));
+            Assert.Contains("Break has already ended", ex.Message);
+        }
 
-        // Act
-        session.End(valid.end);
+        [Theory]
+        [InlineData(default, "EndTime time must be provided")]
+        [InlineData("11:00", "EndTime time must be after start time")]
+        public void EndBreak_InvalidEndTime_ThrowsDomainException(string timeStr, string expectedMessage)
+        {
+            var session = new BreakSession("punch-123", new TimeOnly(12, 0));
+            var badTime = timeStr == default ? default : TimeOnly.Parse(timeStr);
 
-        // Assert
-        Assert.Equal(valid.end, session.EndTime);
-        Assert.Equal(valid.duration, session.Duration);
-        Assert.True(session.IsComplete());
-    }
-
-    // End - break already ended
-    [Fact]
-    public void EndBreak_BreakAlreadyEnded_ThrowsDomainException()
-    {
-        // Arrange
-        var valid = GetValidParameters();
-        var session = new BreakSession(valid.punchRecordId, valid.start);
-        session.End(valid.end);
-
-        // Act & Assert
-        var ex = Assert.Throws<DomainException>(() =>
-            session.End(valid.end)
-        );
-        Assert.Contains("Break has already ended", ex.Message);
-    }
-
-    // End - invalid
-    [Theory]
-    [MemberData(nameof(InvalidEndTimes))]
-    public void EndBreak_EndBeforeStart_ThrowsException(TimeOnly badTime, string expectedMessage)
-    {
-        // Arrange
-        var valid = GetValidParameters();
-        var session = new BreakSession(valid.punchRecordId, valid.start);
-
-        // Act & Assert
-        AssertThrowsBreakSessionException(() => 
-            session.End(badTime),
-            expectedMessage
-        );
+            AssertThrowsBreakSessionException(
+                () => session.End(badTime),
+                expectedMessage
+            );
+        }
     }
 }

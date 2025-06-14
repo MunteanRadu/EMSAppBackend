@@ -9,6 +9,7 @@ namespace EMSApp.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Policy = "MustBeAssigned")]
 public class PunchRecordsController : ControllerBase
 {
     private readonly IPunchRecordService _service;
@@ -24,12 +25,15 @@ public class PunchRecordsController : ControllerBase
 
     [HttpPost]
     public async Task<ActionResult<PunchRecordDto>> Create(
-        [FromBody] CreatePunchRecordRequest req,
-        CancellationToken ct)
+    [FromBody] CreatePunchRecordRequest req,
+    CancellationToken ct)
     {
         try
         {
-            var date = DateOnly.FromDateTime(DateTime.UtcNow);
+            var date = req.Date != default
+                ? req.Date
+                : DateOnly.FromDateTime(DateTime.Now);
+
             var created = await _service.CreateAsync(req.UserId, date, req.TimeIn, ct);
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, _mapper.Map<PunchRecordDto>(created));
         }
@@ -38,6 +42,7 @@ public class PunchRecordsController : ControllerBase
             return BadRequest(ex.Message);
         }
     }
+
 
     [HttpPost("{id}/punchout")]
     public async Task<IActionResult> PunchOut(

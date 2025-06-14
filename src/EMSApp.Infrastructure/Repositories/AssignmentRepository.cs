@@ -105,4 +105,11 @@ public class AssignmentRepository : IAssignmentRepository
             .ToListAsync(cancellationToken);
         return result;
     }
+
+    public async Task<IReadOnlyList<Assignment>> FilterByAsync(Expression<Func<Assignment, bool>> predicate, CancellationToken cancellationToken = default)
+    {
+        return await _collection
+          .Find(predicate)
+          .ToListAsync(cancellationToken);
+    }
 }
