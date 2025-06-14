@@ -3,19 +3,33 @@ using EMSApp.Application;
 using EMSApp.Domain;
 using EMSApp.Domain.Exceptions;
 using MongoDB.Bson;
+using System.Threading;
 using ZstdSharp.Unsafe;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace EMSApp.Infrastructure;
 
 public class PunchRecordService : IPunchRecordService
 {
+    private readonly IShiftAssignmentRepository _shiftAssignmentRepo;
     private readonly IPunchRecordRepository _repo;
     private readonly ILeaveRequestService _leaveService;
+    private readonly IPolicyService _policyService;
+    private readonly IBreakSessionRepository _breakSessionRepository;
     private readonly IMapper _mapper;
-    public PunchRecordService(IPunchRecordRepository repo, ILeaveRequestService leaveService, IMapper mapper)
+    public PunchRecordService(
+        IShiftAssignmentRepository shiftAssignmentRepo,
+        IPunchRecordRepository repo, 
+        ILeaveRequestService leaveService, 
+        IPolicyService policyService, 
+        IBreakSessionRepository breakSessionRepository, 
+        IMapper mapper)
     {
+        _shiftAssignmentRepo = shiftAssignmentRepo;
         _repo = repo;
         _leaveService = leaveService;
+        _policyService = policyService;
+        _breakSessionRepository = breakSessionRepository;
         _mapper = mapper;
     }
 
@@ -27,8 +41,34 @@ public class PunchRecordService : IPunchRecordService
             l.StartDate <= date &&
             l.EndDate >= date))
         {
-            throw new DomainException("Cannot punch in while you have an active approved leave.");
+            throw new DomainException("Cannot punch in while you have an active approved leave");
         }
+
+        var policy = await _policyService.GetByYearAsync(date.Year, ct);
+        if (policy == null)
+            throw new DomainException($"No company policy defined for year {date.Year}");
+
+        var assignment = await _shiftAssignmentRepo.GetForUserOnDateAsync(userId, date, ct);
+        TimeOnly windowStart, windowEnd;
+        if (assignment != null)
+        {
+            windowStart = assignment.StartTime;
+            windowEnd = assignment.EndTime;
+        }
+        else
+        {
+            windowStart = policy.WorkDayStart;
+            windowEnd = policy.WorkDayStart;
+        }
+
+        var earliestAllowed = windowStart.Add(-policy.PunchInTolerance);
+
+        if (time < earliestAllowed)
+        {
+            throw new DomainException(
+                $"Punch-in at {time} is befored allowed window {earliestAllowed}-{assignment.StartTime}");
+        }
+
         var punchRecord = new PunchRecord(userId, date, time);
         await _repo.CreateAsync(punchRecord, ct);
         return punchRecord;
@@ -37,7 +77,42 @@ public class PunchRecordService : IPunchRecordService
     public async Task<PunchRecordDto> PunchOutAsync(string punchId, TimeOnly timeOut, CancellationToken ct)
     {
         var punchRecord = await _repo.GetByIdAsync(punchId);
-        if (punchRecord is null) return null;
+        if (punchRecord is null)
+            throw new KeyNotFoundException($"Punch record with ID {punchId} not found");
+
+        var policy = await _policyService.GetByYearAsync(punchRecord.Date.Year, ct);
+        if (policy == null)
+            throw new DomainException($"No company policy defined for year {punchRecord.Date.Year}.");
+
+        var assignment = await _shiftAssignmentRepo.GetForUserOnDateAsync(punchRecord.UserId, punchRecord.Date, ct);
+        TimeOnly windowStart, windowEnd;
+        if (assignment != null)
+        {
+            windowStart = assignment.StartTime;
+            windowEnd = assignment.EndTime;
+        }
+        else
+        {
+            windowStart = policy.WorkDayEnd;
+            windowEnd = policy.WorkDayEnd;
+        }
+
+        var latestAllowed = windowEnd.Add(policy.PunchOutTolerance);
+
+        if (timeOut > latestAllowed)
+        {
+            throw new DomainException(
+                $"Punch-out at {timeOut} is after allowed window {assignment.EndTime}-{latestAllowed}");
+        }
+
+        var breaks = await _breakSessionRepository.ListByPunchRecordAsync(punchId, ct);
+        var totalBreaks = breaks.Aggregate(TimeSpan.Zero, (acc, b) => acc + (b.Duration ?? TimeSpan.Zero));
+
+        if (totalBreaks > policy.MaxTotalBreakPerDay)
+        {
+            Console.WriteLine($"[WARNING] Total breaks for punch {punchId} exceeded MaxTotalBreakPerDay ({totalBreaks} > {policy.MaxTotalBreakPerDay})");
+            punchRecord.MarkAsNonCompliant();
+        }
 
         punchRecord.PunchOut(timeOut);
 
@@ -45,6 +120,7 @@ public class PunchRecordService : IPunchRecordService
 
         return _mapper.Map<PunchRecordDto>(punchRecord);
     }
+
 
     public async Task<PunchRecordDto?> GetByIdAsync(string id, CancellationToken ct)
     {
@@ -67,14 +143,71 @@ public class PunchRecordService : IPunchRecordService
         return _repo.ListByUserAsync(userId, ct);
     }
 
-    public Task UpdateAsync(PunchRecord record, CancellationToken ct)
+    public async Task UpdateAsync(PunchRecord record, CancellationToken ct)
     {
-        return _repo.UpdateAsync(record, false, ct);
+        var policy = await _policyService.GetByYearAsync(record.Date.Year, ct);
+        if (policy == null)
+            throw new DomainException($"No company policy defined for year {record.Date.Year}");
+
+        var assignment = await _shiftAssignmentRepo.GetForUserOnDateAsync(record.UserId, record.Date, ct);
+
+        TimeOnly windowStart = assignment?.StartTime ?? policy.WorkDayStart;
+        TimeOnly windowEnd = assignment?.EndTime ?? policy.WorkDayStart;
+
+        var earliest = windowStart.Add(-policy.PunchInTolerance);
+        if (record.TimeIn < earliest)
+            throw new DomainException(
+                $"Punch-in {record.TimeIn} is befored allowed window {earliest}-{assignment.StartTime}");
+
+        var latest = windowEnd.Add(policy.PunchOutTolerance);
+        if (record.TimeOut > latest)
+        {
+            throw new DomainException(
+                $"Punch-out at {record.TimeOut} is after allowed window {assignment.EndTime}-{latest}");
+        }
+
+
+        if (record.TimeOut.HasValue)
+        {
+            if (!policy.IsValidPunchOut(record.TimeOut.Value))
+            {
+                var punchOutWindowStart = policy.WorkDayEnd.Add(-policy.PunchOutTolerance);
+                var punchOutWindowEnd = policy.WorkDayEnd.Add(policy.PunchOutTolerance);
+
+                throw new DomainException($"Punch-out time {record.TimeOut.Value} does not respect company policy (allowed window: {punchOutWindowStart} - {punchOutWindowEnd}).");
+            }
+
+            var breaks = await _breakSessionRepository.ListByPunchRecordAsync(record.Id, ct);
+
+            foreach (var breakSession in breaks)
+            {
+                if (breakSession.Duration.HasValue && breakSession.Duration.Value > policy.MaxSingleBreak)
+                {
+                    throw new DomainException($"Break session exceeds maximum allowed single break duration ({policy.MaxSingleBreak}).");
+                }
+            }
+
+            var totalBreaks = breaks.Aggregate(TimeSpan.Zero, (acc, b) => acc + (b.Duration ?? TimeSpan.Zero));
+
+            if (totalBreaks > policy.MaxTotalBreakPerDay)
+            {
+                throw new DomainException($"Total breaks for the day exceed allowed maximum ({policy.MaxTotalBreakPerDay}).");
+            }
+        }
+
+        await _repo.UpdateAsync(record, false, ct);
     }
 
-    public Task DeleteAsync(string id, CancellationToken ct)
+
+    public async Task DeleteAsync(string id, CancellationToken ct)
     {
-        return _repo.DeleteAsync(id, ct);
+        var breaks = await _breakSessionRepository.ListByPunchRecordAsync(id, ct);
+        foreach (var b in breaks)
+        {
+            await _breakSessionRepository.DeleteAsync(b.Id, ct);
+        }
+
+        await _repo.DeleteAsync(id, ct);
     }
 
     public Task<IReadOnlyList<PunchRecord>> GetAllAsync(CancellationToken ct)

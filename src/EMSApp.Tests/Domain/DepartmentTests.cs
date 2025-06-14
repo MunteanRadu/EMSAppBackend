@@ -1,159 +1,177 @@
-﻿using EMSApp.Domain.Entities;
+﻿using System;
+using EMSApp.Domain.Entities;
 using EMSApp.Domain.Exceptions;
+using Xunit;
 
-namespace EMSApp.Tests;
-
-[Trait("Category", "Domain")]
-public class DepartmentTests
+namespace EMSApp.Tests
 {
-    [Fact]
-    public void Constructor_ValidParameters_CreatesDepartment()
+    [Trait("Category", "Domain")]
+    public class DepartmentTests
     {
-        // Arrange
-        var name = "New DepartmentId";
-        var manager = "manager-123";
+        [Fact]
+        public void Constructor_ValidName_CreatesDepartment()
+        {
+            // Arrange
+            var name = "New Department";
 
-        // Act
-        var department = new Department(name, manager);
+            // Act
+            var department = new Department(name);
 
-        // Assert
-        Assert.Equal(name, department.Name);
-        Assert.Equal(manager, department.ManagerId);
-        Assert.Empty(department.Employees);
-    }
+            // Assert
+            Assert.False(string.IsNullOrWhiteSpace(department.Id));
+            Assert.Equal(name, department.Name);
+            Assert.Empty(department.Employees);
+            Assert.Null(department.ManagerId);
+        }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Constructor_InvalidManager_ThrowDomainException(string badManagerId)
-    {
-        // Arrange
-        var name = "New DepartmentId";
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public void Constructor_InvalidName_ThrowsDomainException(string badName)
+        {
+            // Act & Assert
+            var ex = Assert.Throws<DomainException>(() => new Department(badName));
+            Assert.Contains("DepartmentId name cannot be empty", ex.Message);
+        }
 
-        // Act & Assert
-        var ex = Assert.Throws<DomainException>(() =>
-            new Department(name, badManagerId)
-        );
-        Assert.Contains("DepartmentId manager cannot be empty", ex.Message);
-    }
+        [Fact]
+        public void AssignManager_ValidId_SetsManagerId()
+        {
+            // Arrange
+            var department = new Department("Dept A");
+            var managerId = "mgr-123";
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Constructor_InvalidName_ThrowDomainException(string badName)
-    {
-        // Arrange
-        var manager = "manager-123";
+            // Act
+            department.AssignManager(managerId);
 
-        // Act & Assert
-        var ex = Assert.Throws<DomainException>(() =>
-            new Department(badName, manager)
-        );
-        Assert.Contains("DepartmentId name cannot be empty", ex.Message);
-    }
+            // Assert
+            Assert.Equal(managerId, department.ManagerId);
+        }
 
-    [Fact]
-    public void AddEmployee_ValidParameters_AddsEmployeeToList()
-    {
-        // Arrange
-        var name = "New DepartmentId";
-        var manager = "manager-123";
-        var department = new Department(name, manager);
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public void AssignManager_InvalidId_ThrowsDomainException(string badManagerId)
+        {
+            // Arrange
+            var department = new Department("Dept A");
 
-        // Act & Assert
-        var employeeId = "employee-123";
-        Assert.Empty(department.Employees);
-        department.AddEmployee(employeeId);
-        Assert.Single(department.Employees);
-        Assert.Equal(employeeId, department.Employees[0]);
-    }
+            // Act & Assert
+            var ex = Assert.Throws<DomainException>(() => department.AssignManager(badManagerId));
+            Assert.Contains("DepartmentId manager cannot be empty", ex.Message);
+        }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void AddEmployee_InvalidParameters_ThrowsDomainException(string badEmployeeId)
-    {
-        // Arrange
-        var name = "New DepartmentId";
-        var manager = "manager-123";
-        var department = new Department(name, manager);
+        [Fact]
+        public void UpdateName_ValidName_ChangesName()
+        {
+            // Arrange
+            var department = new Department("Old Name");
+            var newName = "New Name";
 
-        // Act & Assert
-        var ex = Assert.Throws<DomainException>(() =>
-            department.AddEmployee(badEmployeeId)
-        );
-        Assert.Contains("UserId ID cannot be empty", ex.Message);
-    }
+            // Act
+            department.UpdateName(newName);
 
-    [Fact]
-    public void AddEmployee_ExistingEmployee_ThrowsDomainException()
-    {
-        // Arrange
-        var name = "New DepartmentId";
-        var manager = "manager-123";
-        var department = new Department(name, manager);
-        var employee = "employee-123";
+            // Assert
+            Assert.Equal(newName, department.Name);
+        }
 
-        // Act & Assert
-        department.AddEmployee(employee);
-        var ex = Assert.Throws<DomainException>(() =>
-            department.AddEmployee(employee)
-        );
-        Assert.Contains("UserId is already in the department", ex.Message);
-    }
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public void UpdateName_InvalidName_ThrowsDomainException(string badName)
+        {
+            // Arrange
+            var department = new Department("Dept X");
 
-    [Fact]
-    public void RemoveEmployee_ValidParameters_AddsEmployeeToList()
-    {
-        // Arrange
-        var name = "New DepartmentId";
-        var manager = "manager-123";
-        var employee = "employee-123";
-        var department = new Department(name, manager);
-        department.AddEmployee(employee);
+            // Act & Assert
+            var ex = Assert.Throws<DomainException>(() => department.UpdateName(badName));
+            Assert.Contains("DepartmentId name cannot be empty", ex.Message);
+        }
 
-        // Act & Assert
-        Assert.Single(department.Employees);
-        department.RemoveEmployee(employee);
-        Assert.Empty(department.Employees);
-    }
+        [Fact]
+        public void AddEmployee_ValidUserId_AddsEmployee()
+        {
+            // Arrange
+            var department = new Department("Dept B");
+            var userId = "emp-123";
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void RemoveEmployee_InvalidParameters_ThrowsDomainException(string badEmployeeId)
-    {
-        // Arrange
-        var name = "New DepartmentId";
-        var manager = "manager-123";
-        var employee = "employee-123";
-        var department = new Department(name, manager);
-        department.AddEmployee(employee);
+            // Act
+            department.AddEmployee(userId);
 
-        // Act & Assert
-        var ex = Assert.Throws<DomainException>(() =>
-            department.RemoveEmployee(badEmployeeId)
-        );
-        Assert.Contains("UserId ID cannot be empty", ex.Message);
-    }
+            // Assert
+            Assert.Single(department.Employees);
+            Assert.Equal(userId, department.Employees[0]);
+        }
 
-    [Fact]
-    public void RemoveEmployee_NonExistingEmployee_ThrowsDomainException()
-    {
-        // Arrange
-        var name = "New DepartmentId";
-        var manager = "manager-123";
-        var department = new Department(name, manager);
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public void AddEmployee_InvalidUserId_ThrowsDomainException(string badUserId)
+        {
+            // Arrange
+            var department = new Department("Dept B");
 
-        // Act & Assert
-        var employee = "employee-123";
-        var ex = Assert.Throws<DomainException>(() =>
-            department.RemoveEmployee(employee)
-        );
-        Assert.Contains("UserId was not in this department", ex.Message);
+            // Act & Assert
+            var ex = Assert.Throws<DomainException>(() => department.AddEmployee(badUserId));
+            Assert.Contains("UserId ID cannot be empty", ex.Message);
+        }
+
+        [Fact]
+        public void AddEmployee_DuplicateUserId_ThrowsDomainException()
+        {
+            // Arrange
+            var department = new Department("Dept B");
+            var userId = "emp-123";
+            department.AddEmployee(userId);
+
+            // Act & Assert
+            var ex = Assert.Throws<DomainException>(() => department.AddEmployee(userId));
+            Assert.Contains("UserId is already in the department", ex.Message);
+        }
+
+        [Fact]
+        public void RemoveEmployee_ExistingUserId_RemovesEmployee()
+        {
+            // Arrange
+            var department = new Department("Dept C");
+            var userId = "emp-321";
+            department.AddEmployee(userId);
+
+            // Act
+            department.RemoveEmployee(userId);
+
+            // Assert
+            Assert.Empty(department.Employees);
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public void RemoveEmployee_InvalidUserId_ThrowsDomainException(string badUserId)
+        {
+            // Arrange
+            var department = new Department("Dept D");
+            department.AddEmployee("emp-001");
+
+            // Act & Assert
+            var ex = Assert.Throws<DomainException>(() => department.RemoveEmployee(badUserId));
+            Assert.Contains("UserId ID cannot be empty", ex.Message);
+        }
+
+        [Fact]
+        public void RemoveEmployee_NonExistingUserId_ThrowsDomainException()
+        {
+            // Arrange
+            var department = new Department("Dept E");
+
+            // Act & Assert
+            var ex = Assert.Throws<DomainException>(() => department.RemoveEmployee("emp-999"));
+            Assert.Contains("UserId was not in this department", ex.Message);
+        }
     }
 }

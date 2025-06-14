@@ -5,140 +5,176 @@ using EMSApp.Application;
 using EMSApp.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Xunit;
 
-namespace EMSApp.Tests;
-
-[Trait("Category", "Controller")]
-public class DepartmentsControllerTests
+namespace EMSApp.Tests
 {
-    private readonly Mock<IDepartmentService> _svc = new();
-    private readonly Mock<IMapper> _mapper = new();
-    private readonly DepartmentsController _ctrl;
-    private readonly CancellationToken _ct = CancellationToken.None;
-
-    public DepartmentsControllerTests()
-        => _ctrl = new DepartmentsController(_svc.Object, _mapper.Object);
-
-    [Fact]
-    public async Task Create_ReturnsCreatedDto()
+    [Trait("Category", "Controller")]
+    public class DepartmentsControllerTests
     {
-        // Arrange
-        var req = new CreateDepartmentRequest(Name: "HR", ManagerId: "mgr1");
-        var dept = new Department("HR", "mgr1");
-        var dto = new DepartmentDto
+        private readonly Mock<IDepartmentService> _svc = new();
+        private readonly Mock<IMapper> _mapper = new();
+        private readonly DepartmentsController _ctrl;
+        private readonly CancellationToken _ct = CancellationToken.None;
+
+        public DepartmentsControllerTests()
         {
-            Id = dept.Id,
-            Name = dept.Name,
-            ManagerId = dept.ManagerId,
-            Employees = new List<string>()
-        };
-        _svc.Setup(s => s.CreateAsync(req.Name, req.ManagerId, _ct))
-            .ReturnsAsync(dept);
-        _mapper.Setup(m => m.Map<DepartmentDto>(dept)).Returns(dto);
+            _ctrl = new DepartmentsController(_svc.Object, _mapper.Object);
+        }
 
-        // Act
-        var result = await _ctrl.Create(req, _ct);
-
-        // Assert
-        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
-        Assert.Equal(dto, created.Value);
-        _svc.Verify(s => s.CreateAsync(req.Name, req.ManagerId, _ct), Times.Once);
-    }
-
-    [Fact]
-    public async Task GetById_Found_ReturnsDto()
-    {
-        // Arrange
-        var dept = new Department("IT", "mgr2");
-        var dto = new DepartmentDto
+        [Fact]
+        public async Task Create_ReturnsCreatedAtActionResult_WithDto()
         {
-            Id = dept.Id,
-            Name = dept.Name,
-            ManagerId = dept.ManagerId,
-            Employees = new List<string>()
-        };
-        _svc.Setup(s => s.GetByIdAsync(dept.Id, _ct)).ReturnsAsync(dept);
-        _mapper.Setup(m => m.Map<DepartmentDto>(dept)).Returns(dto);
+            // Arrange
+            var req = new CreateDepartmentRequest(Name: "HR");
+            var dept = new Department("HR");
+            var dto = new DepartmentDto(dept.Id, "HR", "mngr", new List<string>());
 
-        // Act
-        var result = await _ctrl.GetById(dept.Id, _ct);
+            _svc
+                .Setup(s => s.CreateAsync(req.Name, _ct))
+                .ReturnsAsync(dept);
 
-        // Assert
-        Assert.Equal(dto, result.Value);
-        _svc.Verify(s => s.GetByIdAsync(dept.Id, _ct), Times.Once);
-    }
+            _mapper
+                .Setup(m => m.Map<DepartmentDto>(dept))
+                .Returns(dto);
 
-    [Fact]
-    public async Task List_ReturnsDtos()
-    {
-        // Arrange
-        var list = new List<Department> { new Department("Ops", "mgr3") };
-        var dtos = new List<DepartmentDto> {
-                new DepartmentDto {
-                    Id=list[0].Id,
-                    Name=list[0].Name,
-                    ManagerId=list[0].ManagerId,
-                    Employees=new List<string>()
-                }
+            // Act
+            var action = await _ctrl.Create(req, _ct);
+
+            // Assert
+            var created = Assert.IsType<CreatedAtActionResult>(action.Result);
+            Assert.Equal(nameof(_ctrl.GetById), created.ActionName);
+            Assert.Equal(dto, created.Value);
+
+            _svc.Verify(s => s.CreateAsync("HR", _ct), Times.Once);
+            _mapper.Verify(m => m.Map<DepartmentDto>(dept), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetById_Existing_ReturnsDto()
+        {
+            // Arrange
+            var dept = new Department("IT");
+            var dto = new DepartmentDto(dept.Id, "IT", "mngr", new List<string>());
+
+            _svc.Setup(s => s.GetByIdAsync(dept.Id, _ct)).ReturnsAsync(dept);
+            _mapper.Setup(m => m.Map<DepartmentDto>(dept)).Returns(dto);
+
+            // Act
+            var action = await _ctrl.GetById(dept.Id, _ct);
+
+            // Assert
+            Assert.Equal(dto, action.Value);
+            _svc.Verify(s => s.GetByIdAsync(dept.Id, _ct), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetById_NotFound_ReturnsNotFound()
+        {
+            // Arrange
+            _svc.Setup(s => s.GetByIdAsync("nope", _ct)).ReturnsAsync((Department?)null);
+
+            // Act
+            var action = await _ctrl.GetById("nope", _ct);
+
+            // Assert
+            Assert.IsType<NotFoundResult>(action.Result);
+        }
+
+        [Fact]
+        public async Task List_ReturnsOkObjectResult_WithDtos()
+        {
+            // Arrange
+            var list = new List<Department>
+            {
+                new Department("Ops"),
+                new Department("Sales")
             };
-        _svc.Setup(s => s.GetAllAsync(_ct)).ReturnsAsync(list);
-        _mapper.Setup(m => m.Map<IEnumerable<DepartmentDto>>(list)).Returns(dtos);
+            var dtos = new List<DepartmentDto>
+            {
+                new DepartmentDto(list[0].Id, "Ops", "mngr",new List<string>()),
+                new DepartmentDto(list[1].Id, "Sales", "mngr", new List<string>())
+            };
 
-        // Act
-        var result = await _ctrl.List(_ct);
+            _svc.Setup(s => s.GetAllAsync(_ct)).ReturnsAsync(list);
+            _mapper.Setup(m => m.Map<IEnumerable<DepartmentDto>>(list)).Returns(dtos);
 
-        // Assert
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        Assert.Equal(dtos, ok.Value);
-        _svc.Verify(s => s.GetAllAsync(_ct), Times.Once);
-    }
+            // Act
+            var action = await _ctrl.List(_ct);
 
-    [Fact]
-    public async Task Update_CallsService()
-    {
-        // Arrange
-        var dept = new Department("Sales", "mgr4");
-        var req = new UpdateDepartmentRequest { Name = "Sales2", ManagerId = "mgr5" };
-        _svc.Setup(s => s.GetByIdAsync(dept.Id, _ct)).ReturnsAsync(dept);
+            // Assert
+            var ok = Assert.IsType<OkObjectResult>(action.Result);
+            var body = Assert.IsAssignableFrom<IEnumerable<DepartmentDto>>(ok.Value);
+            Assert.Equal(2, body.Count());
+            _svc.Verify(s => s.GetAllAsync(_ct), Times.Once);
+            _mapper.Verify(m => m.Map<IEnumerable<DepartmentDto>>(list), Times.Once);
+        }
 
-        // Act
-        var result = await _ctrl.Update(dept.Id, req, _ct);
+        [Fact]
+        public async Task Update_Existing_CallsServiceAndReturnsNoContent()
+        {
+            // Arrange
+            var dept = new Department("Support");
+            var req = new UpdateDepartmentRequest(Name: "Support HQ", ManagerId: null);
 
-        // Assert
-        Assert.IsType<NoContentResult>(result);
-        _svc.Verify(s => s.UpdateAsync(dept, _ct), Times.Once);
-    }
+            _svc.Setup(s => s.GetByIdAsync(dept.Id, _ct)).ReturnsAsync(dept);
 
-    [Fact]
-    public async Task Delete_CallsService()
-    {
-        // Act
-        var result = await _ctrl.Delete("idX", _ct);
+            // Act
+            var result = await _ctrl.Update(dept.Id, req, _ct);
 
-        // Assert
-        Assert.IsType<NoContentResult>(result);
-        _svc.Verify(s => s.DeleteAsync("idX", _ct), Times.Once);
-    }
+            // Assert
+            Assert.IsType<NoContentResult>(result);
+            Assert.Equal("Support HQ", dept.Name);
+            _svc.Verify(s => s.UpdateAsync(dept, _ct), Times.Once);
+        }
 
-    [Fact]
-    public async Task AddEmployee_CallsService()
-    {
-        // Act
-        var result = await _ctrl.AddEmployee("idX", new AddDepartmentEmployeeRequest(UserId: "u1"), _ct);
+        [Fact]
+        public async Task Update_NotFound_ReturnsNotFound()
+        {
+            // Arrange
+            _svc.Setup(s => s.GetByIdAsync("nope", _ct)).ReturnsAsync((Department?)null);
 
-        // Assert
-        Assert.IsType<NoContentResult>(result);
-        _svc.Verify(s => s.AddEmployeeAsync("idX", "u1", _ct), Times.Once);
-    }
+            // Act
+            var result = await _ctrl.Update("nope", new UpdateDepartmentRequest(Name: "X", ManagerId: null), _ct);
 
-    [Fact]
-    public async Task RemoveEmployee_CallsService()
-    {
-        // Act
-        var result = await _ctrl.RemoveEmployee("idX", "u1", _ct);
+            // Assert
+            Assert.IsType<NotFoundResult>(result);
+        }
 
-        // Assert
-        Assert.IsType<NoContentResult>(result);
-        _svc.Verify(s => s.RemoveEmployeeAsync("idX", "u1", _ct), Times.Once);
+        [Fact]
+        public async Task Delete_Always_CallsServiceAndReturnsNoContent()
+        {
+            // Act
+            var result = await _ctrl.Delete("dept123", _ct);
+
+            // Assert
+            Assert.IsType<NoContentResult>(result);
+            _svc.Verify(s => s.DeleteAsync("dept123", _ct), Times.Once);
+        }
+
+        [Fact]
+        public async Task AddEmployee_Always_CallsServiceAndReturnsNoContent()
+        {
+            // Act
+            var result = await _ctrl.AddEmployee("dept1", new AddDepartmentEmployeeRequest(UserId: "u1"), _ct);
+
+            // Assert
+            Assert.IsType<NoContentResult>(result);
+            _svc.Verify(s => s.AddEmployeeAsync("dept1", "u1", _ct), Times.Once);
+        }
+
+        [Fact]
+        public async Task RemoveEmployee_Always_CallsServiceAndReturnsNoContent()
+        {
+            // Act
+            var result = await _ctrl.RemoveEmployee("dept1", "u2", _ct);
+
+            // Assert
+            Assert.IsType<NoContentResult>(result);
+            _svc.Verify(s => s.RemoveEmployeeAsync("dept1", "u2", _ct), Times.Once);
+        }
     }
 }

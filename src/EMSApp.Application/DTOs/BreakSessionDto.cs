@@ -5,5 +5,6 @@ public sealed record BreakSessionDto(
     string PunchRecordId,
     TimeOnly StartTime,
     TimeOnly? EndTime,
-    TimeSpan? Duration
+    TimeSpan? Duration,
+    bool IsNonCompliant
 );

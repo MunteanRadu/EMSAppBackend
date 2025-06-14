@@ -15,6 +15,10 @@ using EMSApp.Application.Auth;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json.Serialization;
 using System.Text.Json;
+using OpenAI;
+using OpenAI.Chat;
+using EMSApp.Application.Interfaces;
+using EMSApp.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +31,32 @@ builder.Services.AddControllers().AddJsonOptions(opts =>
     c.Add(new TimeSpanJsonConverter());   // c (hh:mm:ss)
     c.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false));
 });
+
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<ApiExceptionFilter>();
+});
+
+// AI
+builder.Services.Configure<OpenAISettings>(
+    builder.Configuration.GetSection("OpenAI"));
+
+builder.Services.AddSingleton<OpenAIClient>(sp =>
+{
+    var openAIOptions = sp.GetRequiredService<IOptions<OpenAISettings>>().Value;
+    return new OpenAIClient(openAIOptions.ApiKey);
+});
+
+// Simplified ChatClient registration
+builder.Services.AddScoped<ChatClient>(sp => {
+    var client = sp.GetRequiredService<OpenAIClient>();
+    var settings = sp.GetRequiredService<IOptions<OpenAISettings>>().Value;
+    return client.GetChatClient(settings.Model);
+});
+
+
+builder.Services.AddScoped<IChatBotService, ChatBotService>();
+builder.Services.AddScoped<IChatBotService, ChatBotService>();
 
 //  Infrastructure layer
 builder.Services.Configure<DatabaseSettings>(
@@ -87,6 +117,11 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AdminOnly", p => p.RequireRole("Admin"));
     options.AddPolicy("ManagerOnly", p => p.RequireRole("Manager"));
     options.AddPolicy("EmployeeOnly", p => p.RequireRole("Employee"));
+    options.AddPolicy("MustBeAssigned", policy =>
+        policy.RequireAssertion(ctx =>
+            ctx.User.HasClaim(c => c.Type == "departmentId" && !string.IsNullOrWhiteSpace(c.Value))
+        )
+    );
 });
 
 // Swagger
@@ -152,6 +187,12 @@ app.Run();
 /// <summary>
 /// Extension methods to wire up DI in Program.cs
 /// </summary>
+/// 
+public class OpenAISettings
+{
+    public string ApiKey { get; set; } = null!;
+    public string Model { get; set; } = null!;
+}
 public static class StartupExtensions
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
@@ -160,6 +201,7 @@ public static class StartupExtensions
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IPunchRecordService, PunchRecordService>();
         services.AddScoped<IScheduleService, ScheduleService>();
+        services.AddScoped<IShiftAssignmentService, ShiftAssignmentService>();
         services.AddScoped<IDepartmentService, DepartmentService>();
         services.AddScoped<IPolicyService, PolicyService>();
         services.AddScoped<ILeaveRequestService, LeaveRequestService>();
@@ -168,6 +210,8 @@ public static class StartupExtensions
         services.AddScoped<IAssignmentFeedbackService, AssignmentFeedbackService>();
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IShiftRuleService, ShiftRuleService>();
+        services.AddScoped<IScheduleGenerationService, ScheduleGenerationService>();
         return services;
     }
 
@@ -180,13 +224,14 @@ public static class StartupExtensions
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IPunchRecordRepository, PunchRecordRepository>();
         services.AddScoped<IScheduleRepository, ScheduleRepository>();
+        services.AddScoped<IShiftAssignmentRepository, ShiftAssignmentRepository>();
         services.AddScoped<IDepartmentRepository, DepartmentRepository>();
         services.AddScoped<IPolicyRepository, PolicyRepository>();
         services.AddScoped<ILeaveRequestRepository, LeaveRequestRepository>();
         services.AddScoped<IBreakSessionRepository, BreakSessionRepository>();
         services.AddScoped<IAssignmentRepository, AssignmentRepository>();
         services.AddScoped<IAssignmentFeedbackRepository, AssignmentFeedbackRepository>();
-
+        services.AddScoped<IShiftRuleRepository, ShiftRuleRepository>();
         return services;
     }
 }

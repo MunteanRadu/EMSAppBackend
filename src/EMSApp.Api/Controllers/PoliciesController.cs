@@ -2,6 +2,7 @@
 using EMSApp.Application;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ZstdSharp.Unsafe;
 
 namespace EMSApp.Api.Controllers;
 
@@ -9,12 +10,12 @@ namespace EMSApp.Api.Controllers;
 [Route("api/[controller]")]
 public class PoliciesController : ControllerBase
 {
-    private readonly IPolicyService _svc;
+    private readonly IPolicyService _service;
     private readonly IMapper _mapper;
 
-    public PoliciesController(IPolicyService svc, IMapper mapper)
+    public PoliciesController(IPolicyService service, IMapper mapper)
     {
-        _svc = svc;
+        _service = service;
         _mapper = mapper;
     }
 
@@ -24,7 +25,7 @@ public class PoliciesController : ControllerBase
         [FromBody] CreatePolicyRequest req,
         CancellationToken ct)
     {
-        var p = await _svc.CreateAsync(
+        var p = await _service.CreateAsync(
             req.Year,
             req.WorkDayStart,
             req.WorkDayEnd,
@@ -43,12 +44,21 @@ public class PoliciesController : ControllerBase
             dto);
     }
 
+    [Authorize(Roles = "admin")]
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<PolicyDto>>> List(CancellationToken ct)
+    {
+        var list = await _service.GetAllAsync(ct);
+        return Ok(_mapper.Map<IEnumerable<PolicyDto>>(list));
+    }
+
+    [Authorize(Roles = "admin")]
     [HttpGet("{year:int}")]
     public async Task<ActionResult<PolicyDto>> GetByYear(
         int year,
         CancellationToken ct)
     {
-        var p = await _svc.GetByYearAsync(year, ct);
+        var p = await _service.GetByYearAsync(year, ct);
         if (p is null) return NotFound();
         return _mapper.Map<PolicyDto>(p);
     }
@@ -60,12 +70,12 @@ public class PoliciesController : ControllerBase
         [FromBody] UpdateLeaveQuotasRequest req,
         CancellationToken ct)
     {
-        var p = await _svc.GetByYearAsync(year, ct);
+        var p = await _service.GetByYearAsync(year, ct);
         if (p is null) return NotFound();
 
         if (req.LeaveQuotas is not null) p.SetLeaveQuotas(req.LeaveQuotas);
 
-        await _svc.UpdateAsync(p, ct);
+        await _service.UpdateAsync(p, ct);
         return NoContent();
     }
 
@@ -76,7 +86,7 @@ public class PoliciesController : ControllerBase
         [FromBody] UpdatePolicyRequest req,
         CancellationToken ct)
     {
-        var p = await _svc.GetByYearAsync(year, ct);
+        var p = await _service.GetByYearAsync(year, ct);
         if (p is null) return NotFound();
 
         if (req.WorkDayStart is not null) p.SetWorkingHours(req.WorkDayStart.Value, p.WorkDayEnd);
@@ -88,7 +98,7 @@ public class PoliciesController : ControllerBase
         if (req.OvertimeMultiplier is not null) p.SetOvertimeMultiplier(req.OvertimeMultiplier.Value);
         //if (req.LeaveQuotas is not null) p.SetLeaveQuotas(req.LeaveQuotas);
 
-        await _svc.UpdateAsync(p, ct);
+        await _service.UpdateAsync(p, ct);
         return NoContent();
     }
 
@@ -96,7 +106,7 @@ public class PoliciesController : ControllerBase
     [HttpDelete("{year:int}")]
     public async Task<IActionResult> Delete(int year, CancellationToken ct)
     {
-        await _svc.DeleteAsync(year, ct);
+        await _service.DeleteAsync(year, ct);
         return NoContent();
     }
 }

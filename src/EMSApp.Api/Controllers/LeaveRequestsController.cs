@@ -103,6 +103,20 @@ public class LeaveRequestsController : ControllerBase
         return Ok(_mapper.Map<IEnumerable<LeaveRequestDto>>(list));
     }
 
+    [HttpGet("remaining/{userId}")]
+    [Authorize]
+    public async Task<IActionResult> GetRemainingLeaveDays(
+    [FromQuery] string userId,
+    [FromQuery] LeaveType type,
+    [FromQuery] int year,
+    CancellationToken ct)
+    {
+        var remaining = await _service.GetRemainingLeaveDaysAsync(userId, type, year, ct);
+        return Ok(remaining);
+    }
+
+
+
     [Authorize(Roles = "admin,manager")]
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(

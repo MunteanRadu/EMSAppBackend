@@ -16,20 +16,16 @@ public class Policy
     [BsonRepresentation(BsonType.Int32)]
     public int Year { get; private set; }
 
-    // Working hours
     public TimeOnly WorkDayStart { get; private set; }
     public TimeOnly WorkDayEnd { get; private set; }
 
-    // Grace periods for punching early/late
     public TimeSpan PunchInTolerance { get; private set; }
     public TimeSpan PunchOutTolerance { get; private set; }
 
-    // Break and overtime rules
     public TimeSpan MaxSingleBreak { get; private set; }
     public TimeSpan MaxTotalBreakPerDay { get; private set; }
     public decimal OvertimeMultiplier { get; private set; }
 
-    // Annual quotas (days) for each leave type
     [BsonDictionaryOptions(DictionaryRepresentation.ArrayOfDocuments)]
     public Dictionary<LeaveType, int>? LeaveQuotas { get; private set; }
 
@@ -59,12 +55,6 @@ public class Policy
             throw new DomainException("Work day end must be provided");
         if (workDayEnd <= workDayStart)
             throw new DomainException("Work day end must be after work day start");
-
-        // Punch tolerances validation
-        if (punchInTolerance == default || punchOutTolerance == default)
-            throw new DomainException("Punch tolerances must be provided");
-        if (punchInTolerance < TimeSpan.Zero || punchOutTolerance < TimeSpan.Zero)
-            throw new DomainException("Punch tolerances must be non-negative");
 
         // LeaveTypes validation
         foreach (LeaveType lt in Enum.GetValues(typeof(LeaveType)))
@@ -106,8 +96,7 @@ public class Policy
     /// <param name="timeIn"></param>
     /// <returns></returns>
     public bool IsValidPunchIn(TimeOnly timeIn)
-        => timeIn >= WorkDayStart.Add(-PunchInTolerance)
-        && timeIn <= WorkDayStart.Add(PunchInTolerance);
+        => timeIn >= WorkDayStart.Add(-PunchInTolerance);
 
     /// <summary>
     /// Returns true if punch-out time is within allowed hours
@@ -115,8 +104,7 @@ public class Policy
     /// <param name="timeOut"></param>
     /// <returns></returns>
     public bool IsValidPunchOut(TimeOnly timeOut)
-        => timeOut >= WorkDayEnd.Add(-PunchOutTolerance)
-        && timeOut <= WorkDayEnd.Add(PunchOutTolerance);
+        => timeOut <= WorkDayEnd.Add(PunchOutTolerance);
 
     /// <summary>
     /// How many days of this leave type are allowed per year
@@ -166,11 +154,6 @@ public class Policy
     /// <exception cref="DomainException"></exception>
     public void SetPunchTolerances(TimeSpan punchInTolerance, TimeSpan punchOutTolerance)
     {
-        if (punchInTolerance == default || punchOutTolerance == default)
-            throw new DomainException("Punch tolerances must be provided");
-        if (punchInTolerance < TimeSpan.Zero || punchOutTolerance < TimeSpan.Zero)
-            throw new DomainException("Punch tolerances must be non-negative");
-
         PunchInTolerance = punchInTolerance;
         PunchOutTolerance = punchOutTolerance;
     }
