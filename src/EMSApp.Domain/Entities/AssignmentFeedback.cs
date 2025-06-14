@@ -17,11 +17,11 @@ public class AssignmentFeedback
     {
         // AssignmentId validation
         if (string.IsNullOrWhiteSpace(taskId))
-            throw new DomainException("AssignmentId Id cannot be empty");
+            throw new DomainException("AssignmentId cannot be empty");
 
         // UserId validation
         if (string.IsNullOrWhiteSpace(userId))
-            throw new DomainException("UserId Id cannot be empty");
+            throw new DomainException("UserId cannot be empty");
 
         // Text validation
         if (string.IsNullOrWhiteSpace(text))

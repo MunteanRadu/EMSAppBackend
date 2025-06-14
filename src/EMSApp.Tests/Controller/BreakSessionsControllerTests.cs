@@ -2,112 +2,194 @@
 using EMSApp.Api.Controllers;
 using EMSApp.Api;
 using EMSApp.Application;
-using EMSApp.Domain;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Xunit;
+using EMSApp.Domain;
 
-namespace EMSApp.Tests;
-
-[Trait("Category", "Controller")]
-public class BreakSessionsControllerTests
+namespace EMSApp.Tests
 {
-    private readonly Mock<IBreakSessionService> _svc = new();
-    private readonly Mock<IMapper> _mapper = new();
-    private readonly BreakSessionsController _ctrl;
-    private readonly CancellationToken _ct = CancellationToken.None;
-    private const string PunchId = "pr1";
-
-    public BreakSessionsControllerTests()
-        => _ctrl = new BreakSessionsController(_svc.Object, _mapper.Object);
-
-    [Fact]
-    public async Task Create_ReturnsCreatedDto()
+    [Trait("Category", "Controller")]
+    public class BreakSessionsControllerTests
     {
-        // Arrange
-        var req = new CreateBreakSessionRequest("p", TimeOnly.Parse("12:00")) { };
-        var bs = new BreakSession("pr1", TimeOnly.Parse("12:00"));
-        var dto = new BreakSessionDto
+        private const string PunchId = "pr1";
+        private readonly Mock<IBreakSessionService> _svc = new();
+        private readonly Mock<IMapper> _mapper = new();
+        private readonly BreakSessionsController _ctrl;
+        private readonly CancellationToken _ct = CancellationToken.None;
+
+        public BreakSessionsControllerTests()
         {
-            Id = bs.Id,
-            PunchRecordId = bs.PunchRecordId,
-            StartTime = bs.StartTime,
-            EndTime = null,
-            Duration = null
-        };
-        _svc.Setup(s => s.CreateAsync(PunchId, req.StartTime, _ct)).ReturnsAsync(bs);
-        _mapper.Setup(m => m.Map<BreakSessionDto>(bs)).Returns(dto);
+            _ctrl = new BreakSessionsController(_svc.Object, _mapper.Object);
+        }
 
-        // Act
-        var result = await _ctrl.Create(PunchId, req, _ct);
-
-        // Assert
-        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
-        Assert.Equal(dto, created.Value);
-        _svc.Verify(s => s.CreateAsync(PunchId, req.StartTime, _ct), Times.Once);
-    }
-
-    [Fact]
-    public async Task GetById_FoundAndMatchesPunch_ReturnsDto()
-    {
-        // Arrange
-        var bs = new BreakSession("pr1", TimeOnly.Parse("13:00"));
-        var dto = new BreakSessionDto
+        [Fact]
+        public async Task Create_Post_ReturnsCreatedAtAction_WithDto()
         {
-            Id = bs.Id,
-            PunchRecordId = bs.PunchRecordId,
-            StartTime = bs.StartTime,
-            EndTime = null,
-            Duration = null
-        };
-        _svc.Setup(s => s.GetByIdAsync(bs.Id, _ct)).ReturnsAsync(bs);
-        _mapper.Setup(m => m.Map<BreakSessionDto>(bs)).Returns(dto);
+            // Arrange
+            var req = new CreateBreakSessionRequest(StartTime: TimeOnly.Parse("12:00"));
+            var bs = new BreakSession(PunchId, TimeOnly.Parse("12:00"));
+            var dto = new BreakSessionDto(
+                bs.Id,
+                bs.PunchRecordId,
+                bs.StartTime,
+                bs.EndTime,
+                bs.Duration,
+                bs.IsNonCompliant);
 
-        // Act
-        var result = await _ctrl.GetById(PunchId, bs.Id, _ct);
+            _svc.Setup(s => s.CreateAsync(PunchId, req.StartTime, _ct)).ReturnsAsync(dto);
+            _mapper.Setup(m => m.Map<BreakSessionDto>(dto)).Returns(dto);
 
-        // Assert
-        Assert.Equal(dto, result.Value);
-        _svc.Verify(s => s.GetByIdAsync(bs.Id, _ct), Times.Once);
-    }
+            // Act
+            var action = await _ctrl.Create(PunchId, req, _ct);
 
-    [Fact]
-    public async Task GetById_MismatchPunch_Returns404()
-    {
-        // Arrange
-        var bs = new BreakSession("other", TimeOnly.Parse("14:00"));
-        _svc.Setup(s => s.GetByIdAsync(bs.Id, _ct)).ReturnsAsync(bs);
+            // Assert
+            var created = Assert.IsType<CreatedAtActionResult>(action.Result);
+            Assert.Equal(nameof(_ctrl.GetById), created.ActionName);
 
-        // Act
-        var result = await _ctrl.GetById(PunchId, bs.Id, _ct);
+            // route values
+            Assert.Equal(PunchId, created.RouteValues["punchId"]);
+            Assert.Equal(bs.Id, created.RouteValues["id"]);
 
-        // Assert
-        Assert.IsType<NotFoundResult>(result.Result);
-    }
+            Assert.Equal(dto, created.Value);
+            _svc.Verify(s => s.CreateAsync(PunchId, req.StartTime, _ct), Times.Once);
+        }
 
-    [Fact]
-    public async Task Update_CallsService()
-    {
-        // Arrange
-        var bs = new BreakSession(PunchId, TimeOnly.Parse("15:00"));
-        var req = new UpdateBreakSessionRequest { EndTime = TimeOnly.Parse("15:30") };
-        _svc.Setup(s => s.GetByIdAsync(bs.Id, _ct)).ReturnsAsync(bs);
+        [Fact]
+        public async Task End_Patch_ReturnsOk_WhenFound()
+        {
+            // Arrange
+            var req = new UpdateBreakSessionRequest(EndTime: TimeOnly.Parse("12:30"));
+            var dto = new BreakSessionDto(
+                Id: "bs1",
+                PunchRecordId: PunchId,
+                StartTime: TimeOnly.Parse("12:00"),
+                EndTime: req.EndTime,
+                Duration: TimeSpan.FromMinutes(30),
+                IsNonCompliant: false);
 
-        // Act
-        var result = await _ctrl.Update(PunchId, bs.Id, req, _ct);
+            _svc
+                .Setup(s => s.EndAsync(PunchId, dto.Id, req.EndTime, _ct))
+                .ReturnsAsync(dto);
 
-        // Assert
-        Assert.IsType<NoContentResult>(result);
-        _svc.Verify(s => s.UpdateAsync(bs, _ct), Times.Once);
-    }
+            // Act
+            var action = await _ctrl.End(PunchId, dto.Id, req, _ct);
 
-    [Fact]
-    public async Task Delete_CallsService()
-    {
-        // Act
-        var result = await _ctrl.Delete(PunchId, "bs1", _ct);
+            // Assert
+            var ok = Assert.IsType<OkObjectResult>(action);
+            Assert.Equal(dto, ok.Value);
+            _svc.Verify(s => s.EndAsync(PunchId, dto.Id, req.EndTime, _ct), Times.Once);
+        }
 
-        // Assert
-        Assert.IsType<NoContentResult>(result);
-        _svc.Verify(s => s.DeleteAsync("bs1", _ct), Times.Once);
+        [Fact]
+        public async Task End_Patch_ReturnsNotFound_WhenServiceReturnsNull()
+        {
+            // Arrange
+            var req = new UpdateBreakSessionRequest(EndTime: TimeOnly.Parse("12:30"));
+            _svc
+                .Setup(s => s.EndAsync(PunchId, "bad-id", req.EndTime, _ct))
+                .ReturnsAsync((BreakSessionDto?)null);
+
+            // Act
+            var action = await _ctrl.End(PunchId, "bad-id", req, _ct);
+
+            // Assert
+            Assert.IsType<NotFoundResult>(action);
+        }
+
+        [Fact]
+        public async Task GetById_Get_ReturnsDto_WhenMatch()
+        {
+            // Arrange
+            var bs = new BreakSession(PunchId, TimeOnly.Parse("13:00"));
+            var dto = new BreakSessionDto(
+                bs.Id,
+                bs.PunchRecordId,
+                bs.StartTime,
+                bs.EndTime,
+                bs.Duration,
+                bs.IsNonCompliant);
+
+            _svc.Setup(s => s.GetByIdAsync(bs.Id, _ct)).ReturnsAsync(dto);
+            _mapper.Setup(m => m.Map<BreakSessionDto>(dto)).Returns(dto);
+
+            // Act
+            var action = await _ctrl.GetById(PunchId, bs.Id, _ct);
+
+            // Assert
+            Assert.Equal(dto, action.Value);
+            _svc.Verify(s => s.GetByIdAsync(bs.Id, _ct), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetById_Get_ReturnsNotFound_WhenNullOrMismatch()
+        {
+            var badDto = new BreakSessionDto(
+                Id: "bs1",
+                PunchRecordId: "otherPunch",
+                StartTime: TimeOnly.Parse("14:00"),
+                EndTime: null,
+                Duration: null,
+                IsNonCompliant: false);
+            _svc.Setup(s => s.GetByIdAsync(badDto.Id, _ct)).ReturnsAsync(badDto);
+
+            // Act
+            var action = await _ctrl.GetById(PunchId, badDto.Id, _ct);
+
+            // Assert: wrong punchId route
+            Assert.IsType<NotFoundResult>(action.Result);
+
+            // Arrange: service returns null
+            _svc.Setup(s => s.GetByIdAsync("nope", _ct)).ReturnsAsync((BreakSessionDto?)null);
+            var action2 = await _ctrl.GetById(PunchId, "nope", _ct);
+            Assert.IsType<NotFoundResult>(action2.Result);
+        }
+
+        [Fact]
+        public async Task List_Get_ReturnsOkObject_WithDtos()
+        {
+            // Arrange
+            var dto1 = new BreakSessionDto(
+                Id: "bs1",
+                PunchRecordId: PunchId,
+                StartTime: TimeOnly.Parse("08:00"),
+                EndTime: null,
+                Duration: null,
+                IsNonCompliant: false);
+            var dto2 = new BreakSessionDto(
+                Id: "bs2",
+                PunchRecordId: PunchId,
+                StartTime: TimeOnly.Parse("09:00"),
+                EndTime: null,
+                Duration: null,
+                IsNonCompliant: false);
+            var dtoList = new List<BreakSessionDto> { dto1, dto2 };
+
+            _svc.Setup(s => s.ListByPunchRecordAsync(PunchId, _ct)).ReturnsAsync(dtoList);
+            _mapper.Setup(m => m.Map<IEnumerable<BreakSessionDto>>(dtoList)).Returns(dtoList);
+
+            // Act
+            var action = await _ctrl.List(PunchId, _ct);
+
+            // Assert
+            var ok = Assert.IsType<OkObjectResult>(action.Result);
+            Assert.Equal(dtoList, ok.Value);
+            _svc.Verify(s => s.ListByPunchRecordAsync(PunchId, _ct), Times.Once);
+        }
+
+        [Fact]
+        public async Task Delete_Delete_ReturnsNoContent_AndCallsService()
+        {
+            // Act
+            var result = await _ctrl.Delete("bs1", _ct);
+
+            // Assert
+            Assert.IsType<NoContentResult>(result);
+            _svc.Verify(s => s.DeleteAsync("bs1", _ct), Times.Once);
+        }
     }
 }

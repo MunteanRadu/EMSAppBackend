@@ -1,114 +1,198 @@
 ﻿using EMSApp.Application;
 using EMSApp.Domain;
 using EMSApp.Domain.Entities;
+using EMSApp.Domain.Exceptions;
 using EMSApp.Infrastructure;
 using Moq;
+using Xunit;
 
-namespace EMSApp.Tests;
-
-[Trait("Category", "Service")]
-public class DepartmentServiceTests
+namespace EMSApp.Tests
 {
-    private readonly Mock<IDepartmentRepository> _repo;
-    private readonly IDepartmentService _service;
-    private CancellationToken _ct = CancellationToken.None;
-
-    public DepartmentServiceTests()
+    [Trait("Category", "Service")]
+    public class DepartmentServiceTests
     {
-        _repo = new Mock<IDepartmentRepository>();
-        _service = new DepartmentService(_repo.Object);
-    }
+        private readonly Mock<IDepartmentRepository> _deptRepo;
+        private readonly Mock<IUserRepository> _userRepo;
+        private readonly IDepartmentService _service;
+        private readonly CancellationToken _ct = CancellationToken.None;
 
-    [Fact]
-    public async Task CreateAsync_ValidData_CreatesAndReturnsEntity()
-    {
-        // Arrange
-        var name = "name";
-        var manager = "manager-1";
-
-        // Act
-        var result = await _service.CreateAsync(name, manager, _ct);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(name, result.Name);
-        Assert.Equal(manager, result.ManagerId);
-
-        _repo.Verify(r => r.CreateAsync(
-            It.Is<Department>(d =>
-                d.Name == name &&
-                d.ManagerId == manager),
-            _ct),
-            Times.Once);
-    }
-
-    [Fact]
-    public async Task GetAllAsync_RepoReturnsList_ServiceReturnsSame()
-    {
-        // Arrange
-        var list = new List<Department>
+        public DepartmentServiceTests()
         {
-            new Department("n1", "m1"),
-            new Department("n2", "m2")
-        };
-        _repo.Setup(r => r.GetAllAsync(_ct)).ReturnsAsync(list);
+            _deptRepo = new Mock<IDepartmentRepository>();
+            _userRepo = new Mock<IUserRepository>();
+            _service = new DepartmentService(_deptRepo.Object, _userRepo.Object);
+        }
 
-        // Act
-        var result = await _service.GetAllAsync(_ct);
+        [Fact]
+        public async Task CreateAsync_CreatesDepartment()
+        {
+            // Arrange
+            var name = "Engineering";
 
-        // Assert
-        Assert.Same(list, result);
-        _repo.Verify(r => r.GetAllAsync(_ct), Times.Once);
-    }
+            // Act
+            var dept = await _service.CreateAsync(name, _ct);
 
-    [Fact]
-    public async Task GetByIdAsync_RepoReturnsEntiry_ServiceReturnsSame()
-    {
-        // Arrange
-        var d = new Department("n1", "m1");
-        _repo.Setup(r => r.GetByIdAsync(d.Id, _ct)).ReturnsAsync(d);
+            // Assert
+            Assert.NotNull(dept);
+            Assert.Equal(name, dept.Name);
+            _deptRepo.Verify(r => r.CreateAsync(
+                It.Is<Department>(d => d.Name == name),
+                _ct),
+                Times.Once);
+        }
 
-        // Act
-        var result = await _service.GetByIdAsync(d.Id, _ct);
+        [Fact]
+        public async Task GetAllAsync_ReturnsFromRepository()
+        {
+            var list = new List<Department> { new Department("A"), new Department("B") };
+            _deptRepo.Setup(r => r.GetAllAsync(_ct)).ReturnsAsync(list);
 
-        // Assert
-        Assert.Same(d, result);
-        _repo.Verify(r => r.GetByIdAsync(d.Id, _ct), Times.Once);
-    }
+            var result = await _service.GetAllAsync(_ct);
 
-    [Fact]
-    public async Task GetByIdAsync_NotFound_ReturnsNull()
-    {
-        // Arrange
-        _repo.Setup(r => r.GetByIdAsync("noid", _ct)).ReturnsAsync((Department?)null);
+            Assert.Same(list, result);
+            _deptRepo.Verify(r => r.GetAllAsync(_ct), Times.Once);
+        }
 
-        // Act
-        var result = await _service.GetByIdAsync("noid", _ct);
+        [Fact]
+        public async Task GetByIdAsync_Found_ReturnsDepartment()
+        {
+            var d = new Department("Sales");
+            _deptRepo.Setup(r => r.GetByIdAsync(d.Id, _ct)).ReturnsAsync(d);
 
-        // Assert
-        Assert.Null(result);
-    }
+            var result = await _service.GetByIdAsync(d.Id, _ct);
 
-    [Fact]
-    public async Task UpdateAsync_CallsRepository()
-    {
-        // Arrange
-        var d = new Department("n1", "m1");
+            Assert.Same(d, result);
+            _deptRepo.Verify(r => r.GetByIdAsync(d.Id, _ct), Times.Once);
+        }
 
-        // Act
-        await _service.UpdateAsync(d, _ct);
+        [Fact]
+        public async Task GetByIdAsync_NotFound_ReturnsNull()
+        {
+            _deptRepo.Setup(r => r.GetByIdAsync("no", _ct)).ReturnsAsync((Department?)null);
 
-        // Assert
-        _repo.Verify(r => r.UpdateAsync(d, false, _ct), Times.Once);
-    }
+            var result = await _service.GetByIdAsync("no", _ct);
 
-    [Fact]
-    public async Task DeleteAsync_CallsRepository()
-    {
-        // Act
-        await _service.DeleteAsync("dept-1", _ct);
+            Assert.Null(result);
+        }
 
-        // Assert
-        _repo.Verify(r => r.DeleteAsync("dept-1", _ct), Times.Once);
+        [Fact]
+        public async Task UpdateAsync_CallsRepository()
+        {
+            var d = new Department("HR");
+            await _service.UpdateAsync(d, _ct);
+
+            _deptRepo.Verify(r => r.UpdateAsync(d, false, _ct), Times.Once);
+        }
+
+        [Fact]
+        public async Task DeleteAsync_UnassignsUsersAndDeletes()
+        {
+            // Arrange
+            var deptId = "dept1";
+            var users = new List<User>
+            {
+                new User("a@e","alice","password","dept1"),
+                new User("b@e","bob","password","dept1")
+            };
+            _userRepo.Setup(r => r.ListByDepartmentAsync(deptId, _ct))
+                     .ReturnsAsync(users);
+
+            // Act
+            await _service.DeleteAsync(deptId, _ct);
+
+            // Assert
+            foreach (var u in users)
+                Assert.Equal("", u.DepartmentId);
+
+            foreach (var u in users)
+                _userRepo.Verify(r => r.UpdateAsync(u, true, _ct), Times.Once);
+
+            _deptRepo.Verify(r => r.DeleteAsync(deptId, _ct), Times.Once);
+        }
+
+        [Fact]
+        public async Task AddEmployeeAsync_HappyPath()
+        {
+            // Arrange
+            var deptId = "deptX";
+            var userId = "userX";
+            var user = new User("x@e", "xyz", "password", "old");
+            var dept = new Department("D");
+
+            _userRepo.Setup(r => r.GetByIdAsync(userId, _ct)).ReturnsAsync(user);
+            _deptRepo.Setup(r => r.GetByIdAsync(deptId, _ct)).ReturnsAsync(dept);
+
+            // Act
+            await _service.AddEmployeeAsync(deptId, userId, _ct);
+
+            // Assert
+            Assert.Equal(deptId, user.DepartmentId);
+            _userRepo.Verify(r => r.UpdateAsync(user, true, _ct), Times.Once);
+            Assert.Contains(userId, dept.Employees);
+            _deptRepo.Verify(r => r.UpdateAsync(dept, false, _ct), Times.Once);
+        }
+
+        [Fact]
+        public async Task AddEmployeeAsync_UserNotFound_Throws()
+        {
+            _userRepo.Setup(r => r.GetByIdAsync("no", _ct)).ReturnsAsync((User?)null);
+
+            await Assert.ThrowsAsync<KeyNotFoundException>(()
+                => _service.AddEmployeeAsync("dept", "no", _ct));
+        }
+
+        [Fact]
+        public async Task AddEmployeeAsync_DeptNotFound_Throws()
+        {
+            var user = new User("u@e", "user", "password", "old");
+            _userRepo.Setup(r => r.GetByIdAsync("u", _ct)).ReturnsAsync(user);
+            _deptRepo.Setup(r => r.GetByIdAsync("no", _ct)).ReturnsAsync((Department?)null);
+
+            await Assert.ThrowsAsync<KeyNotFoundException>(()
+                => _service.AddEmployeeAsync("no", "u", _ct));
+        }
+
+        [Fact]
+        public async Task RemoveEmployeeAsync_HappyPath()
+        {
+            // Arrange
+            var deptId = "deptY";
+            var userId = "userY";
+            var user = new User("y@e", "xyz", "password", "deptY");
+            var dept = new Department("D");
+            dept.AddEmployee(userId);
+
+            _userRepo.Setup(r => r.GetByIdAsync(userId, _ct)).ReturnsAsync(user);
+            _deptRepo.Setup(r => r.GetByIdAsync(deptId, _ct)).ReturnsAsync(dept);
+
+            // Act
+            await _service.RemoveEmployeeAsync(deptId, userId, _ct);
+
+            // Assert
+            Assert.Equal("", user.DepartmentId);
+            _userRepo.Verify(r => r.UpdateAsync(user, true, _ct), Times.Once);
+            Assert.DoesNotContain(userId, dept.Employees);
+            _deptRepo.Verify(r => r.UpdateAsync(dept, false, _ct), Times.Once);
+        }
+
+        [Fact]
+        public async Task RemoveEmployeeAsync_UserNotFound_Throws()
+        {
+            _userRepo.Setup(r => r.GetByIdAsync("no", _ct)).ReturnsAsync((User?)null);
+
+            await Assert.ThrowsAsync<KeyNotFoundException>(()
+                => _service.RemoveEmployeeAsync("dept", "no", _ct));
+        }
+
+        [Fact]
+        public async Task RemoveEmployeeAsync_DeptNotFound_Throws()
+        {
+            var user = new User("u@e", "user", "password", "dept");
+            _userRepo.Setup(r => r.GetByIdAsync("u", _ct)).ReturnsAsync(user);
+            _deptRepo.Setup(r => r.GetByIdAsync("no", _ct)).ReturnsAsync((Department?)null);
+
+            await Assert.ThrowsAsync<KeyNotFoundException>(()
+                => _service.RemoveEmployeeAsync("no", "u", _ct));
+        }
     }
 }

@@ -28,7 +28,7 @@ public class AssignmentFeedbackServiceTests
         var type = FeedbackType.Manager;
 
         // Act
-        var result = await _service.CreateAsync(assignmentId, userId, text , type, _ct);
+        var result = await _service.CreateAsync(assignmentId, userId, text, type, _ct);
 
         // Assert
         Assert.NotNull(result);
@@ -91,7 +91,7 @@ public class AssignmentFeedbackServiceTests
 
         // Assert
         Assert.Same(list, result);
-        _repo.Verify(r  => r.ListByAssignmentAsync("a1", _ct), Times.Once);
+        _repo.Verify(r => r.ListByAssignmentAsync("a1", _ct), Times.Once);
     }
 
     [Fact]

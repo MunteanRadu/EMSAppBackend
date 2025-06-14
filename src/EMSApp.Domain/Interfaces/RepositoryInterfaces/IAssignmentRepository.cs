@@ -14,4 +14,5 @@ public interface IAssignmentRepository
     Task CreateAsync(Assignment task, CancellationToken cancellationToken = default);
     Task UpdateAsync(Assignment task, bool isUpsert, CancellationToken cancellationToken = default);
     Task DeleteAsync(string id, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Assignment>> FilterByAsync(Expression<Func<Assignment, bool>> predicate, CancellationToken cancellationToken = default);
 }

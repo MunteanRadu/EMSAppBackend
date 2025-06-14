@@ -21,7 +21,7 @@ public class Assignment
     public Assignment(string title, string description, DateTime dueDate, string departmentId, string createdBy)
     {
         if (string.IsNullOrWhiteSpace(title))
-            throw new DomainException("AssignmentId title cannot be empty");
+            throw new DomainException("Title cannot be empty");
         if (dueDate.Date < DateTime.UtcNow.Date)
             throw new DomainException("Due date must be in the future");
         if (string.IsNullOrWhiteSpace(departmentId))
@@ -67,7 +67,7 @@ public class Assignment
     public void Reject()
     {
         if (Status != AssignmentStatus.Done)
-            throw new DomainException("Can only approve a completed task");
+            throw new DomainException("Can only reject a completed task");
         Status = AssignmentStatus.Rejected;
     }
 

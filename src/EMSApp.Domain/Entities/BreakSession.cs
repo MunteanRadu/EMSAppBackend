@@ -9,6 +9,7 @@ public class BreakSession
     public TimeOnly StartTime { get; private set; }
     public TimeOnly? EndTime { get; private set; }
     public TimeSpan? Duration { get; private set; }
+    public bool IsNonCompliant { get; private set; } = false;
 
     public BreakSession(string punchRecordId, TimeOnly start)
     {
@@ -56,5 +57,10 @@ public class BreakSession
             throw new DomainException("EndTime time must be provided");
 
         EndTime = newEndTime;
+    }
+
+    public void MarkAsNonCompliant()
+    {
+        IsNonCompliant = true;
     }
 }

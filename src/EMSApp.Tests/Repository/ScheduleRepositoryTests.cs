@@ -1,224 +1,194 @@
-﻿using EMSApp.Infrastructure.Settings;
-using EMSApp.Infrastructure;
-using Mongo2Go;
-using MongoDB.Driver;
+﻿using System.Threading;
+using System.Threading.Tasks;
 using EMSApp.Domain;
 using EMSApp.Domain.Exceptions;
+using EMSApp.Infrastructure;
+using EMSApp.Infrastructure.Settings;
+using Microsoft.Extensions.Options;
+using Mongo2Go;
+using MongoDB.Driver;
+using Xunit;
 
-namespace EMSApp.Tests;
-
-[Trait("Category", "Repository")]
-public class ScheduleRepositoryTests : IAsyncLifetime
+namespace EMSApp.Tests
 {
-    private readonly MongoDbRunner _dbRunner;
-    private readonly IMongoDbContext _dbContext;
-    private readonly ScheduleRepository _repo;
-    private static string _dbName = "TestDb";
-
-    public ScheduleRepositoryTests()
+    [Trait("Category", "Repository")]
+    public class ScheduleRepositoryTests : IAsyncLifetime
     {
-        _dbRunner = MongoDbRunner.Start();
+        private readonly MongoDbRunner _dbRunner;
+        private readonly IMongoDbContext _dbContext;
+        private readonly ScheduleRepository _repo;
+        private const string DbName = "TestDb";
 
-        var settings = new DatabaseSettings
+        public ScheduleRepositoryTests()
         {
-            ConnectionString = _dbRunner.ConnectionString,
-            DatabaseName = _dbName,
-        };
+            _dbRunner = MongoDbRunner.Start();
+            var settings = new DatabaseSettings
+            {
+                ConnectionString = _dbRunner.ConnectionString,
+                DatabaseName = DbName
+            };
+            var options = Options.Create(settings);
+            var client = new MongoClient(_dbRunner.ConnectionString);
+            _dbContext = new MongoDbContext(client, options);
+            _repo = new ScheduleRepository(_dbContext);
+        }
 
-        _dbContext = new MongoDbContext(settings);
-        _repo = new ScheduleRepository(_dbContext);
-    }
-    public Task DisposeAsync()
-    {
-        _dbRunner.Dispose();
-        return Task.CompletedTask;
-    }
+        public Task DisposeAsync()
+        {
+            _dbRunner.Dispose();
+            return Task.CompletedTask;
+        }
 
-    public async Task InitializeAsync()
-    {
-        var client = new MongoClient(_dbRunner.ConnectionString);
-        var database = client.GetDatabase(_dbName);
-        await database.DropCollectionAsync("Schedules");
-    }
+        public async Task InitializeAsync()
+        {
+            var client = new MongoClient(_dbRunner.ConnectionString);
+            var database = client.GetDatabase(DbName);
+            await database.DropCollectionAsync("Schedules");
+        }
 
-    [Fact]
-    public async Task CreateAndFetch_Schedule_Works()
-    {
-        // Arrange
-        var startTime = TimeOnly.Parse("08:00");
-        var endTime = startTime.AddHours(8);
-        var s = new Schedule("dept-1", "manager-1", DayOfWeek.Monday, startTime, endTime, true);
+        [Fact]
+        public async Task CreateAndFetch_Schedule_Works()
+        {
+            var startTime = TimeOnly.Parse("08:00");
+            var endTime = startTime.AddHours(8);
+            var s = new Schedule("dept-1", "mgr-1", ShiftType.Shift1, DayOfWeek.Monday, startTime, endTime, true);
 
-        // Act
-        await _repo.CreateAsync(s);
-        var byId = await _repo.GetByIdAsync(s.Id);
+            await _repo.CreateAsync(s);
+            var byId = await _repo.GetByIdAsync(s.Id);
 
-        // Assert
-        Assert.NotNull(byId);
-        Assert.Equal(s.Id, byId.Id);
-        Assert.Equal(s.DepartmentId, byId.DepartmentId);
-        Assert.Equal(s.ManagerId, byId.ManagerId);
-        Assert.Equal(s.Day, byId.Day);
-        Assert.Equal(s.StartTime, byId.StartTime);
-        Assert.Equal(s.EndTime, byId.EndTime);
-    }
+            Assert.NotNull(byId);
+            Assert.Equal(s.Id, byId!.Id);
+            Assert.Equal(s.DepartmentId, byId.DepartmentId);
+            Assert.Equal(s.ManagerId, byId.ManagerId);
+            Assert.Equal(s.ShiftType, byId.ShiftType);
+            Assert.Equal(s.Day, byId.Day);
+            Assert.Equal(s.StartTime, byId.StartTime);
+            Assert.Equal(s.EndTime, byId.EndTime);
+            Assert.Equal(s.IsWorkingDay, byId.IsWorkingDay);
+        }
 
-    [Fact]
-    public async Task GetById_NonExistent_ReturnsNull()
-    {
-        // Assert
-        var byId = await _repo.GetByIdAsync("schedule-1");
+        [Fact]
+        public async Task GetById_NonExistent_ReturnsNull()
+        {
+            var got = await _repo.GetByIdAsync("nope");
+            Assert.Null(got);
+        }
 
-        // Act & Assert
-        Assert.Null(byId);
-    }
+        [Fact]
+        public async Task GetByDepartmentAsync_FiltersCorrectly()
+        {
+            var startTime = TimeOnly.Parse("08:00");
+            var endTime = startTime.AddHours(8);
+            var s1 = new Schedule("dept-1", "mgr-1", ShiftType.Shift1, DayOfWeek.Monday, startTime, endTime, true);
+            var s2 = new Schedule("dept-2", "mgr-2", ShiftType.Shift2, DayOfWeek.Tuesday, startTime, endTime, true);
+            await _repo.CreateAsync(s1);
+            await _repo.CreateAsync(s2);
 
-    [Fact]
-    public async Task ListByDepartment_ReturnsSchedules()
-    {
-        // Arrange
-        var startTime = TimeOnly.Parse("08:00");
-        var endTime = startTime.AddHours(8);
-        var s1 = new Schedule("dept-1", "manager-1", DayOfWeek.Monday, startTime, endTime, true);
-        var s2= new Schedule("dept-2", "manager-2", DayOfWeek.Tuesday, startTime, endTime, true);
-        await _repo.CreateAsync(s1);
-        await _repo.CreateAsync(s2);
+            var list = await _repo.GetByDepartmentAsync("dept-1");
 
-        // Act
-        var list = await _repo.ListByDepartmentAsync("dept-1");
+            Assert.Single(list);
+            Assert.Equal(s1.Id, list[0].Id);
+        }
 
-        // Assert
-        Assert.NotEmpty(list);
-        Assert.Contains(list, s => s.Id == s1.Id);
-        Assert.DoesNotContain(list, s => s.Id == s2.Id);
-    }
+        [Fact]
+        public async Task GetByDepartmentAsync_NonExistent_ReturnsEmptyList()
+        {
+            var list = await _repo.GetByDepartmentAsync("dept-x");
+            Assert.Empty(list);
+        }
 
-    [Fact]
-    public async Task ListByDepartment_NonExistent_ReturnsEmptyList()
-    {
-        // Assert
-        var list = await _repo.ListByDepartmentAsync("dept-1");
+        [Fact]
+        public async Task GetByManagerIdAsync_FiltersCorrectly()
+        {
+            var startTime = TimeOnly.Parse("08:00");
+            var endTime = startTime.AddHours(8);
+            var s1 = new Schedule("d1", "mgr-1", ShiftType.Shift1, DayOfWeek.Wednesday, startTime, endTime, true);
+            var s2 = new Schedule("d2", "mgr-2", ShiftType.Shift2, DayOfWeek.Thursday, startTime, endTime, true);
+            await _repo.CreateAsync(s1);
+            await _repo.CreateAsync(s2);
 
-        // Act & Assert
-        Assert.Empty(list);
-    }
+            var list = await _repo.GetByManagerIdAsync("mgr-2");
 
-    [Fact]
-    public async Task ListByManager_ReturnsSchedules()
-    {
-        // Arrange
-        var startTime = TimeOnly.Parse("08:00");
-        var endTime = startTime.AddHours(8);
-        var s1 = new Schedule("dept-1", "manager-1", DayOfWeek.Monday, startTime, endTime, true);
-        var s2 = new Schedule("dept-2", "manager-2", DayOfWeek.Tuesday, startTime, endTime, true);
-        await _repo.CreateAsync(s1);
-        await _repo.CreateAsync(s2);
+            Assert.Single(list);
+            Assert.Equal(s2.Id, list[0].Id);
+        }
 
-        // Act
-        var list = await _repo.ListByManagerAsync("manager-2");
+        [Fact]
+        public async Task GetByManagerIdAsync_NonExistent_ReturnsEmptyList()
+        {
+            var list = await _repo.GetByManagerIdAsync("mgr-x");
+            Assert.Empty(list);
+        }
 
-        // Assert
-        Assert.NotEmpty(list);
-        Assert.Contains(list, s => s.Id == s2.Id);
-        Assert.DoesNotContain(list, s => s.Id == s1.Id);
-    }
+        [Fact]
+        public async Task GetAllAsync_ReturnsAllSchedules()
+        {
+            var startTime = TimeOnly.Parse("08:00");
+            var endTime = startTime.AddHours(8);
+            var s1 = new Schedule("d1", "m1", ShiftType.Shift1, DayOfWeek.Monday, startTime, endTime, true);
+            var s2 = new Schedule("d2", "m2", ShiftType.Shift2, DayOfWeek.Tuesday, startTime, endTime, true);
+            await _repo.CreateAsync(s1);
+            await _repo.CreateAsync(s2);
 
-    [Fact]
-    public async Task ListByManager_NonExistent_ReturnsEmptyList()
-    {
-        // Assert
-        var list = await _repo.ListByManagerAsync("manager-1");
+            var all = await _repo.GetAllAsync();
 
-        // Act & Assert
-        Assert.Empty(list);
-    }
+            Assert.Contains(all, x => x.Id == s1.Id);
+            Assert.Contains(all, x => x.Id == s2.Id);
+        }
 
-    [Fact]
-    public async Task DeleteSchedule_Exists_DeletesSchedule() 
-    {
-        // Arrange
-        var startTime = TimeOnly.Parse("08:00");
-        var endTime = startTime.AddHours(8);
-        var s = new Schedule("dept-1", "manager-1", DayOfWeek.Monday, startTime, endTime, true);
-        await _repo.CreateAsync(s);
-        Assert.NotEmpty(await _repo.ListByManagerAsync("manager-1"));
+        [Fact]
+        public async Task DeleteAsync_Existing_DeletesSchedule()
+        {
+            var s = new Schedule("d", "m", ShiftType.Shift1, DayOfWeek.Friday, TimeOnly.Parse("09:00"), TimeOnly.Parse("17:00"), true);
+            await _repo.CreateAsync(s);
+            Assert.NotNull(await _repo.GetByIdAsync(s.Id));
 
-        // Act
-        await _repo.DeleteAsync(s.Id);
+            await _repo.DeleteAsync(s.Id);
+            Assert.Null(await _repo.GetByIdAsync(s.Id));
+        }
 
-        // Assert
-        Assert.Empty(await _repo.ListByManagerAsync("manager-1"));
-    }
+        [Fact]
+        public async Task DeleteAsync_NonExistent_ThrowsRepositoryException()
+        {
+            await Assert.ThrowsAsync<RepositoryException>(() =>
+                _repo.DeleteAsync("nope")
+            );
+        }
 
-    [Fact]
-    public async Task DeleteSchedule_NonExistent_ThrowsRepositoryException()
-    {
-        // Arrange
-        var startTime = TimeOnly.Parse("08:00");
-        var endTime = startTime.AddHours(8);
-        var s = new Schedule("dept-1", "manager-1", DayOfWeek.Monday, startTime, endTime, true);
-        Assert.Empty(await _repo.ListByManagerAsync("manager-1"));
+        [Fact]
+        public async Task UpdateAsync_Existing_UpdatesSchedule()
+        {
+            var s = new Schedule("d", "m", ShiftType.Shift1, DayOfWeek.Monday, TimeOnly.Parse("08:00"), TimeOnly.Parse("16:00"), true);
+            await _repo.CreateAsync(s);
 
-        // Act & Assert
-        await Assert.ThrowsAsync<RepositoryException>(() =>
-            _repo.DeleteAsync(s.Id)
-        );
-    }
+            var newStart = TimeOnly.Parse("10:00");
+            var newEnd = newStart.AddHours(6);
+            s.UpdateShift(ShiftType.NightShift, newStart, newEnd, false);
 
-    [Fact]
-    public async Task UpdateSchedule_Exists_UpdatesSchedule()
-    {
-        // Arrange
-        var startTime = TimeOnly.Parse("08:00");
-        var endTime = startTime.AddHours(8);
-        var s = new Schedule("dept-1", "manager-1", DayOfWeek.Monday, startTime, endTime, true);
-        await _repo.CreateAsync(s);
-        Assert.Equal(startTime, s.StartTime);
-        Assert.Equal(endTime, s.EndTime);
+            await _repo.UpdateAsync(s);
+            var fetched = await _repo.GetByIdAsync(s.Id);
 
-        var newStart = startTime.AddHours(2);
-        var newEnd = newStart.AddHours(4);
-        s.UpdateShift(newStart, newEnd, true);
+            Assert.Equal(newStart, fetched!.StartTime);
+            Assert.Equal(newEnd, fetched.EndTime);
+            Assert.Equal(ShiftType.NightShift, fetched.ShiftType);
+            Assert.False(fetched.IsWorkingDay);
+        }
 
-        // Act
-        await _repo.UpdateAsync(s);
-        var byId = await _repo.GetByIdAsync(s.Id);
+        [Fact]
+        public async Task UpdateAsync_NonExistent_ThrowsRepositoryException()
+        {
+            var s = new Schedule("d", "m", ShiftType.Shift1, DayOfWeek.Tuesday, TimeOnly.Parse("07:00"), TimeOnly.Parse("15:00"), true);
+            await Assert.ThrowsAsync<RepositoryException>(() =>
+                _repo.UpdateAsync(s)
+            );
+        }
 
-        // Assert
-        Assert.NotNull(byId);
-        Assert.Equal(s.Id, byId.Id);
-    }
-
-    [Fact]
-    public async Task UpdateSchedule_NonExsitent_ThrowsRepositoryException()
-    {
-        // Arrange
-        var startTime = TimeOnly.Parse("08:00");
-        var endTime = startTime.AddHours(8);
-        var s = new Schedule("dept-1", "manager-1", DayOfWeek.Monday, startTime, endTime, true);
-        Assert.Null(await _repo.GetByIdAsync(s.Id));
-
-        // Act & Assert
-        await Assert.ThrowsAsync<RepositoryException>(() =>
-            _repo.UpdateAsync(s)
-        );
-    }
-
-    [Fact]
-    public async Task UpsertSchedule_NonExistent_CreatesSchedule()
-    {
-        // Arrange
-        var startTime = TimeOnly.Parse("08:00");
-        var endTime = startTime.AddHours(8);
-        var s = new Schedule("dept-1", "manager-1", DayOfWeek.Monday, startTime, endTime, true);
-        Assert.Null(await _repo.GetByIdAsync(s.Id));
-
-        // Act
-        await _repo.UpdateAsync(s, true);
-        var byId = await _repo.GetByIdAsync(s.Id);
-
-        // Assert
-        Assert.NotNull(byId);
-        Assert.Equal(s.Id, byId?.Id);
+        [Fact]
+        public async Task UpdateAsync_Upsert_CreatesWhenMissing()
+        {
+            var s = new Schedule("d", "m", ShiftType.Shift1, DayOfWeek.Wednesday, TimeOnly.Parse("06:00"), TimeOnly.Parse("14:00"), true);
+            await _repo.UpdateAsync(s, isUpsert: true);
+            Assert.NotNull(await _repo.GetByIdAsync(s.Id));
+        }
     }
 }

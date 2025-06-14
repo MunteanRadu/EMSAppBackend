@@ -22,7 +22,7 @@ public class ScheduleRepository : IScheduleRepository
         return result;
     }
 
-    public async Task<IReadOnlyList<Schedule>> ListByDepartmentAsync(string departmentId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Schedule>> GetByDepartmentAsync(string departmentId, CancellationToken cancellationToken = default)
     {
         var filter = Builders<Schedule>.Filter.Eq(s => s.DepartmentId, departmentId);
         var result = await _collection
@@ -31,7 +31,7 @@ public class ScheduleRepository : IScheduleRepository
         return result;
     }
 
-    public async Task<IReadOnlyList<Schedule>> ListByManagerAsync(string managerId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Schedule>> GetByManagerIdAsync(string managerId, CancellationToken cancellationToken = default)
     {
         var filter = Builders<Schedule>.Filter.Eq(s => s.ManagerId, managerId);
         var result = await _collection

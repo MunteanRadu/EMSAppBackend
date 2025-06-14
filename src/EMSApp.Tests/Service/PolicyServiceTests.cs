@@ -1,207 +1,165 @@
-﻿using EMSApp.Application;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using EMSApp.Application;
 using EMSApp.Domain;
-using EMSApp.Domain.Entities;
 using EMSApp.Infrastructure;
-using Microsoft.VisualStudio.TestPlatform.Utilities;
 using Moq;
-using System.ComponentModel;
+using Xunit;
 
-namespace EMSApp.Tests;
-
-[Trait("Category", "Service")]
-public class PolicyServiceTests
+namespace EMSApp.Tests
 {
-    private readonly Mock<IPolicyRepository> _repo;
-    private readonly IPolicyService _service;
-    private CancellationToken _ct = CancellationToken.None;
-
-    public PolicyServiceTests()
+    [Trait("Category", "Service")]
+    public class PolicyServiceTests
     {
-        _repo = new Mock<IPolicyRepository>();
-        _service = new PolicyService(_repo.Object);
-    }
+        private readonly Mock<IPolicyRepository> _repoMock;
+        private readonly IPolicyService _service;
+        private readonly CancellationToken _ct = CancellationToken.None;
 
-    private static IDictionary<LeaveType, int> GetValidQuotas()
-    {
-        return Enum.GetValues(typeof(LeaveType))
-                   .Cast<LeaveType>()
-                   .ToDictionary(lt => lt, lt => 10);
-    }
-
-    [Fact]
-    public async Task CreateAsync_ValidData_CreatesAndReturns()
-    {
-        // Arrange
-        var year = 2025;
-        var workDayStart = TimeOnly.Parse("08:00");
-        var workDayEnd = workDayStart.AddHours(8);
-        var punchInTolerance = new TimeSpan(0, 15, 0);
-        var punchOutTolerance = new TimeSpan(0, 15, 0);
-        var maxSingleBreak = new TimeSpan(0, 45, 0);
-        var maxTotalBreakPerDay = new TimeSpan(2, 0, 0);
-        var overtimeMultiplier = 1.5m;
-        var leaveQuotas = GetValidQuotas();
-
-        // Act
-        var result = await _service.CreateAsync(
-            year,
-            workDayStart,
-            workDayEnd,
-            punchInTolerance,
-            punchOutTolerance,
-            maxSingleBreak,
-            maxTotalBreakPerDay,
-            overtimeMultiplier,
-            leaveQuotas,
-            _ct);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(year, result.Year);
-        Assert.Equal(workDayStart, result.WorkDayStart);
-        Assert.Equal(workDayEnd, result.WorkDayEnd);
-        Assert.Equal(punchInTolerance, result.PunchInTolerance);
-        Assert.Equal(punchOutTolerance, result.PunchOutTolerance);
-        Assert.Equal(maxSingleBreak, result.MaxSingleBreak);
-        Assert.Equal(maxTotalBreakPerDay, result.MaxTotalBreakPerDay);
-        Assert.Equal(overtimeMultiplier, result.OvertimeMultiplier);
-        Assert.Equal(leaveQuotas, result.LeaveQuotas);
-
-        _repo.Verify(r => r.CreateAsync(
-            It.Is<Policy>(p =>
-                p.Year == year &&
-                p.WorkDayStart == workDayStart &&
-                p.WorkDayEnd == workDayEnd &&
-                p.PunchInTolerance == punchInTolerance &&
-                p.PunchOutTolerance == punchOutTolerance &&
-                p.MaxSingleBreak == maxSingleBreak &&
-                p.MaxTotalBreakPerDay == maxTotalBreakPerDay &&
-                p.OvertimeMultiplier == overtimeMultiplier &&
-                leaveQuotas.All(kv => p.LeaveQuotas[kv.Key] == kv.Value)),
-            _ct),
-            Times.Once);
-    }
-
-    [Fact]
-    public async Task GetByYearAsync_RepoReturnsEntity_ServiceReturnsSame()
-    {
-        // Arrange
-        var year = 2025;
-        var workDayStart = TimeOnly.Parse("08:00");
-        var workDayEnd = workDayStart.AddHours(8);
-        var punchInTolerance = new TimeSpan(0, 15, 0);
-        var punchOutTolerance = new TimeSpan(0, 15, 0);
-        var maxSingleBreak = new TimeSpan(0, 45, 0);
-        var maxTotalBreakPerDay = new TimeSpan(2, 0, 0);
-        var overtimeMultiplier = 1.5m;
-        var leaveQuotas = GetValidQuotas();
-        var p = new Policy(
-            year,
-            workDayStart,
-            workDayEnd,
-            punchInTolerance,
-            punchOutTolerance,
-            maxSingleBreak,
-            maxTotalBreakPerDay,
-            overtimeMultiplier,
-            leaveQuotas);
-        _repo.Setup(r => r.GetByYearAsync(p.Year, _ct)).ReturnsAsync(p);
-
-        // Act
-        var result = await _service.GetByYearAsync(p.Year, _ct);
-
-        // Assert
-        Assert.Same(p, result);
-        _repo.Verify(r => r.GetByYearAsync(p.Year, _ct), Times.Once);
-    }
-
-    [Fact]
-    public async Task GetByYearAsync_NotFound_ReturnsNull()
-    {
-        // Arrange
-        _repo.Setup(r => r.GetByYearAsync(1, _ct)).ReturnsAsync((Policy?)null);
-
-        // Act
-        var result = await _service.GetByYearAsync(1, _ct);
-
-        // Assert
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public async Task GetAllAsync_RepoReturnsList_ServiceReturnsSame()
-    {
-        // Arrange
-        var year = 2025;
-        var workDayStart = TimeOnly.Parse("08:00");
-        var workDayEnd = workDayStart.AddHours(8);
-        var punchInTolerance = new TimeSpan(0, 15, 0);
-        var punchOutTolerance = new TimeSpan(0, 15, 0);
-        var maxSingleBreak = new TimeSpan(0, 45, 0);
-        var maxTotalBreakPerDay = new TimeSpan(2, 0, 0);
-        var overtimeMultiplier = 1.5m;
-        var leaveQuotas = GetValidQuotas();
-        var list = new List<Policy>
+        public PolicyServiceTests()
         {
-            new Policy(
-                year,
-                workDayStart,
-                workDayEnd,
-                punchInTolerance,
-                punchOutTolerance,
-                maxSingleBreak,
-                maxTotalBreakPerDay,
-                overtimeMultiplier,
-                leaveQuotas)
-        };
-        _repo.Setup(r => r.GetAllAsync(_ct)).ReturnsAsync(list);
+            _repoMock = new Mock<IPolicyRepository>();
+            _service = new PolicyService(_repoMock.Object);
+        }
 
-        // Act
-        var result = await _service.GetAllAsync(_ct);
+        private static IDictionary<LeaveType, int> GetValidQuotas() =>
+            Enum.GetValues<LeaveType>()
+                .Cast<LeaveType>()
+                .ToDictionary(lt => lt, _ => 10);
 
-        // Assert
-        Assert.Same(list, result);
-        _repo.Verify(r => r.GetAllAsync(_ct), Times.Once);
-    }
+        [Fact]
+        public async Task CreateAsync_ValidData_CreatesPolicyAndCallsRepo()
+        {
+            // Arrange
+            var year = 2025;
+            var start = new TimeOnly(8, 0);
+            var end = start.AddHours(8);
+            var pit = TimeSpan.FromMinutes(15);
+            var pot = TimeSpan.FromMinutes(15);
+            var msb = TimeSpan.FromMinutes(45);
+            var mtb = TimeSpan.FromHours(2);
+            var om = 1.5m;
+            var quotas = GetValidQuotas();
 
-    [Fact]
-    public async Task UpdateAsync_CallsRepository()
-    {
-        // Arrange
-        var year = 2025;
-        var workDayStart = TimeOnly.Parse("08:00");
-        var workDayEnd = workDayStart.AddHours(8);
-        var punchInTolerance = new TimeSpan(0, 15, 0);
-        var punchOutTolerance = new TimeSpan(0, 15, 0);
-        var maxSingleBreak = new TimeSpan(0, 45, 0);
-        var maxTotalBreakPerDay = new TimeSpan(2, 0, 0);
-        var overtimeMultiplier = 1.5m;
-        var leaveQuotas = GetValidQuotas();
-        var p = new Policy(
-            year,
-            workDayStart,
-            workDayEnd,
-            punchInTolerance,
-            punchOutTolerance,
-            maxSingleBreak,
-            maxTotalBreakPerDay,
-            overtimeMultiplier,
-            leaveQuotas);
+            // Act
+            var policy = await _service.CreateAsync(
+                year, start, end, pit, pot, msb, mtb, om, quotas, _ct);
 
-        // Act
-        await _service.UpdateAsync(p, _ct);
+            // Assert
+            Assert.Equal(year, policy.Year);
+            Assert.Equal(start, policy.WorkDayStart);
+            Assert.Equal(end, policy.WorkDayEnd);
+            Assert.Equal(pit, policy.PunchInTolerance);
+            Assert.Equal(pot, policy.PunchOutTolerance);
+            Assert.Equal(msb, policy.MaxSingleBreak);
+            Assert.Equal(mtb, policy.MaxTotalBreakPerDay);
+            Assert.Equal(om, policy.OvertimeMultiplier);
+            Assert.Equal(quotas, policy.LeaveQuotas);
 
-        // Assert
-        _repo.Verify(r => r.UpdateAsync(p, false, _ct), Times.Once);
-    }
+            _repoMock.Verify(r => r.CreateAsync(
+                It.Is<Policy>(p =>
+                    p.Year == year &&
+                    p.WorkDayStart == start &&
+                    p.WorkDayEnd == end &&
+                    p.PunchInTolerance == pit &&
+                    p.PunchOutTolerance == pot &&
+                    p.MaxSingleBreak == msb &&
+                    p.MaxTotalBreakPerDay == mtb &&
+                    p.OvertimeMultiplier == om &&
+                    quotas.All(kv => p.LeaveQuotas[kv.Key] == kv.Value)
+                ),
+                It.IsAny<CancellationToken>()),
+                Times.Once);
+        }
 
-    [Fact]
-    public async Task DeleteAsync_CallsRepository()
-    {
-        // Act
-        await _service.DeleteAsync(1, _ct);
+        [Fact]
+        public async Task GetByYearAsync_Existing_ReturnsPolicy()
+        {
+            var p = new Policy(
+                2025,
+                new TimeOnly(8, 0),
+                new TimeOnly(16, 0),
+                TimeSpan.FromMinutes(15),
+                TimeSpan.FromMinutes(10),
+                TimeSpan.FromMinutes(30),
+                TimeSpan.FromHours(2),
+                1.5m,
+                GetValidQuotas()
+            );
+            _repoMock.Setup(r => r.GetByYearAsync(2025, It.IsAny<CancellationToken>()))
+                     .ReturnsAsync(p);
 
-        // Assert
-        _repo.Verify(r => r.DeleteAsync(1, _ct), Times.Once);
+            var result = await _service.GetByYearAsync(2025, _ct);
+
+            Assert.Same(p, result);
+            _repoMock.Verify(r => r.GetByYearAsync(2025, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task GetByYearAsync_NonExistent_ReturnsNull()
+        {
+            _repoMock.Setup(r => r.GetByYearAsync(1, It.IsAny<CancellationToken>()))
+                     .ReturnsAsync((Policy?)null);
+
+            var result = await _service.GetByYearAsync(1, _ct);
+
+            Assert.Null(result);
+        }
+
+        [Fact]
+        public async Task GetAllAsync_RepoReturnsList_ServiceReturnsSame()
+        {
+            var list = new List<Policy>
+            {
+                new Policy(
+                    2025,
+                    new TimeOnly(8,0),
+                    new TimeOnly(16,0),
+                    TimeSpan.FromMinutes(15),
+                    TimeSpan.FromMinutes(10),
+                    TimeSpan.FromMinutes(30),
+                    TimeSpan.FromHours(2),
+                    1.5m,
+                    GetValidQuotas()
+                )
+            };
+            _repoMock.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
+                     .ReturnsAsync(list);
+
+            var result = await _service.GetAllAsync(_ct);
+
+            Assert.Same(list, result);
+            _repoMock.Verify(r => r.GetAllAsync(It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task UpdateAsync_CallsRepoWithUpsertFalse()
+        {
+            var p = new Policy(
+                2025,
+                new TimeOnly(8, 0),
+                new TimeOnly(16, 0),
+                TimeSpan.FromMinutes(15),
+                TimeSpan.FromMinutes(10),
+                TimeSpan.FromMinutes(30),
+                TimeSpan.FromHours(2),
+                1.5m,
+                GetValidQuotas()
+            );
+
+            await _service.UpdateAsync(p, _ct);
+
+            _repoMock.Verify(r => r.UpdateAsync(p, false, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task DeleteAsync_CallsRepository()
+        {
+            await _service.DeleteAsync(2025, _ct);
+
+            _repoMock.Verify(r => r.DeleteAsync(2025, It.IsAny<CancellationToken>()), Times.Once);
+        }
     }
 }

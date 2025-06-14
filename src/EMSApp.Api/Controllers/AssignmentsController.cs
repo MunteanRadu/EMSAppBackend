@@ -71,7 +71,7 @@ public class AssignmentsController : ControllerBase
         else if (asOf is not null)
             list = await _service.ListAsync(a => a.DueDate < asOf && (a.Status == AssignmentStatus.Pending || a.Status == AssignmentStatus.InProgress), ct);
         else if (status is not null)
-            list = await _service.ListAsync(a => a.Status == AssignmentStatus.Pending, ct);
+            list = await _service.ListAsync(a => a.Status == status.Value, ct);
         else if (departmentId is not null)
             list = await _service.ListAsync(a => a.DepartmentId == departmentId, ct);
         else

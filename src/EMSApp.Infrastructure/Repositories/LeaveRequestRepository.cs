@@ -1,6 +1,7 @@
 ﻿using EMSApp.Domain;
 using EMSApp.Domain.Exceptions;
 using MongoDB.Driver;
+using System.Linq.Expressions;
 
 namespace EMSApp.Infrastructure;
 
@@ -22,7 +23,7 @@ public class LeaveRequestRepository : ILeaveRequestRepository
         return result;
     }
 
-    public async Task<IReadOnlyList<LeaveRequest>> ListByManagerAsync(string managerId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<LeaveRequest>> GetByManagerAsync(string managerId, CancellationToken cancellationToken = default)
     {
         var filter = Builders<LeaveRequest>.Filter.Eq(l => l.ManagerId, managerId);
         var result = await _collection
@@ -31,7 +32,7 @@ public class LeaveRequestRepository : ILeaveRequestRepository
         return result;
     }
 
-    public async Task<IReadOnlyList<LeaveRequest>> ListByStatusAsync(LeaveStatus status, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<LeaveRequest>> GetByStatusAsync(LeaveStatus status, CancellationToken cancellationToken = default)
     {
         var filter = Builders<LeaveRequest>.Filter.Eq(l => l.Status, status);
         var result = await _collection
@@ -40,7 +41,7 @@ public class LeaveRequestRepository : ILeaveRequestRepository
         return result;
     }
 
-    public async Task<IReadOnlyList<LeaveRequest>> ListByUserAsync(string userId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<LeaveRequest>> GetByUserAsync(string userId, CancellationToken cancellationToken = default)
     {
         var filter = Builders<LeaveRequest>.Filter.Eq(l => l.UserId, userId);
         var result = await _collection
@@ -82,5 +83,37 @@ public class LeaveRequestRepository : ILeaveRequestRepository
             .Find(Builders<LeaveRequest>.Filter.Empty)
             .ToListAsync(ct);
         return result;
+    }
+
+    public async Task<IEnumerable<LeaveRequest>> GetApprovedLeavesForWeekAsync(IEnumerable<string> userIds, DateOnly weekStart, CancellationToken ct)
+    {
+        // Construim datele de comparație:
+        var weekEnd = weekStart.AddDays(6);
+
+        // Vom filtra LeaveRequest astfel încât:
+        // 1) Status == Approved
+        // 2) UserId ∈ userIds
+        // 3) Intervalul [StartDate, EndDate] să aibă intersecție cu [weekStart, weekEnd]
+        //
+        // Intersecția se traduce prin:
+        //    StartDate <= weekEnd  AND  EndDate >= weekStart
+
+        var filterBuilder = Builders<LeaveRequest>.Filter;
+        var filter = filterBuilder.And(
+            filterBuilder.In(x => x.UserId, userIds),
+            filterBuilder.Eq(x => x.Status, LeaveStatus.Approved),
+            filterBuilder.Lte(x => x.StartDate, weekEnd),   // StartDate <= weekEnd
+            filterBuilder.Gte(x => x.EndDate, weekStart)    // EndDate >= weekStart
+        );
+
+        var result = await _collection.Find(filter).ToListAsync(ct);
+        return result;
+    }
+
+    public async Task<IReadOnlyList<LeaveRequest>> FilterByAsync(Expression<Func<LeaveRequest, bool>> predicate, CancellationToken cancellationToken = default)
+    {
+        return await _collection
+          .Find(predicate)
+          .ToListAsync(cancellationToken);
     }
 }

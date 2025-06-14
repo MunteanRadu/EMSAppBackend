@@ -1,15 +1,21 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Compile Remove="Services\Class1.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\EMSApp.Domain\EMSApp.Domain.csproj" />
     <ProjectReference Include="..\EMSApp.Application\EMSApp.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="AutoMapper" Version="14.0.0" />
+    <PackageReference Include="Intercom.Dotnet.Client" Version="2.1.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.2" />
     <PackageReference Include="MongoDB.Driver" Version="3.3.0" />
+    <PackageReference Include="OpenAI" Version="2.1.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.10.0" />
   </ItemGroup>
 

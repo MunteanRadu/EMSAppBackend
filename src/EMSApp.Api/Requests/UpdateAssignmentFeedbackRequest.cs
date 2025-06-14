@@ -2,7 +2,7 @@
 
 namespace EMSApp.Api;
 
-public record class UpdateAssignmentFeedbackRequest
-{
-    public string? Text { get; init; }
-}
+public record class UpdateAssignmentFeedbackRequest(
+    string? Text
+);
+    

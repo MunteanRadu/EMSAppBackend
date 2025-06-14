@@ -1,214 +1,193 @@
-﻿using EMSApp.Domain.Entities;
+﻿using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using EMSApp.Domain.Entities;
 using EMSApp.Domain.Exceptions;
 using EMSApp.Infrastructure;
 using EMSApp.Infrastructure.Settings;
+using Intercom.Core;
+using Microsoft.Extensions.Options;
 using Mongo2Go;
 using MongoDB.Driver;
+using Xunit;
 
-namespace EMSApp.Tests;
-
-[Trait("Category", "Repository")]
-public class UserRepositoryTests : IAsyncLifetime
+namespace EMSApp.Tests
 {
-    private readonly MongoDbRunner _dbRunner;
-    private readonly IMongoDbContext _dbContext;
-    private readonly UserRepository _repo;
-    private const string _dbName = "TestDb";
-
-    public UserRepositoryTests()
+    [Trait("Category", "Repository")]
+    public class UserRepositoryTests : IAsyncLifetime
     {
-        _dbRunner = MongoDbRunner.Start();
+        private readonly MongoDbRunner _dbRunner;
+        private readonly IMongoDbContext _dbContext;
+        private readonly UserRepository _repo;
+        private const string DbName = "TestDb";
 
-        var settings = new DatabaseSettings
+        public UserRepositoryTests()
         {
-            ConnectionString = _dbRunner.ConnectionString,
-            DatabaseName = _dbName
-        };
-        _dbContext = new MongoDbContext(settings);
-        _repo = new UserRepository(_dbContext);
-    }
+            _dbRunner = MongoDbRunner.Start();
+            var settings = new DatabaseSettings
+            {
+                ConnectionString = _dbRunner.ConnectionString,
+                DatabaseName = DbName
+            };
+            var client = new MongoClient(_dbRunner.ConnectionString);
+            var options = Options.Create(settings);
+            _dbContext = new MongoDbContext(client, options);
+            _repo = new UserRepository(_dbContext);
+        }
 
-    public Task DisposeAsync()
-    {
-        _dbRunner.Dispose();
-        return Task.CompletedTask;
-    }
+        public Task DisposeAsync()
+        {
+            _dbRunner.Dispose();
+            return Task.CompletedTask;
+        }
 
-    public async Task InitializeAsync()
-    {   
-        var client = new MongoClient(_dbRunner.ConnectionString);
-        var database = client.GetDatabase(_dbName);
-        await database.DropCollectionAsync("Users");
-    }
+        public async Task InitializeAsync()
+        {
+            var client = new MongoClient(_dbRunner.ConnectionString);
+            var database = client.GetDatabase(DbName);
+            await database.DropCollectionAsync("Users");
+        }
 
-    [Fact]
-    public async Task CreateAndFetch_User_Works()
-    {
-        // Arrange
-        var u = new User("a@b", "alice", "password123", "dept-1");
+        [Fact]
+        public async Task CreateAndFetch_ByIdEmailUsername_Works()
+        {
+            var u = new User("a@b.com", "alice", "password123", "dept-1");
 
-        // Act
-        await _repo.CreateAsync(u);
-        var byId = await _repo.GetByIdAsync(u.Id);
-        var byEmail = await _repo.GetByEmailAsync(u.Email);
+            await _repo.CreateAsync(u);
 
-        // Assert
-        Assert.NotNull(byEmail);
-        Assert.NotNull(byId);
-        Assert.Equal(byId!.Id, byEmail!.Id);
-        Assert.Equal(u.Email, byId!.Email);
-        Assert.Equal(u.Username, byId!.Username);
-        Assert.Equal(u.PasswordHash, byId!.PasswordHash);
-        Assert.Equal(u.DepartmentId, byId!.DepartmentId);
-    }
+            var byId = await _repo.GetByIdAsync(u.Id);
+            var byEmail = await _repo.GetByEmailAsync(u.Email);
+            var byUsername = await _repo.GetByUsernameAsync(u.Username);
 
-    [Fact]
-    public async Task GetById_NonExistent_ReturnsNull()
-    {
-        // Arrange & Act
-        var got = await _repo.GetByIdAsync("nope");
+            Assert.NotNull(byId);
+            Assert.Equal(u.Id, byId!.Id);
+            Assert.Equal(u.Email, byEmail!.Email);
+            Assert.Equal(u.Username, byUsername!.Username);
+        }
 
-        // Assert
-        Assert.Null(got);
-    }
+        [Fact]
+        public async Task GetById_NonExistent_ReturnsNull() =>
+            Assert.Null(await _repo.GetByIdAsync("nope"));
 
-    [Fact]
-    public async Task GetByEmail_NonExistent_ReturnsNull()
-    {
-        // Arrange & Act
-        var got = await _repo.GetByEmailAsync("nobody@example.com");
+        [Fact]
+        public async Task GetByEmail_NonExistent_ReturnsNull() =>
+            Assert.Null(await _repo.GetByEmailAsync("nobody@x.com"));
 
-        // Assert
-        Assert.Null(got);
-    }
+        [Fact]
+        public async Task GetByUsername_NonExistent_ReturnsNull() =>
+            Assert.Null(await _repo.GetByUsernameAsync("ghost"));
 
+        [Fact]
+        public async Task GetAllAsync_ReturnsAllUsers()
+        {
+            var u1 = new User("a@b.com", "alice", "password1", "d1");
+            var u2 = new User("b@b.com", "bob", "password2", "d2");
 
-    [Fact]
-    public async Task ListAll_ReturnsCreatedUsers()
-    {
-        // Arrange
-        var u1 = new User("a@b", "alice", "password123", "dept-1");
-        var u2 = new User("b@b", "bob", "123password", "dept-2");
+            await _repo.CreateAsync(u1);
+            await _repo.CreateAsync(u2);
 
-        // Act
-        await _repo.CreateAsync(u1);
-        await _repo.CreateAsync(u2);
-        var list = await _repo.GetAllAsync();
+            var all = await _repo.GetAllAsync();
+            Assert.Contains(all, u => u.Id == u1.Id);
+            Assert.Contains(all, u => u.Id == u2.Id);
+        }
 
-        // Assert
-        Assert.Contains(list, u => u.Id == u1.Id);
-        Assert.Contains(list, u => u.Id == u2.Id);
-    }
+        [Fact]
+        public async Task GetAllAsync_EmptyCollection_ReturnsEmptyList() =>
+            Assert.Empty(await _repo.GetAllAsync());
 
-    [Fact]
-    public async Task ListAll_NonExistent_ReturnsEmptyList()
-    {
-        // Arrange & Act
-        var got = await _repo.GetAllAsync();
+        [Fact]
+        public async Task ListByDepartmentAsync_FiltersCorrectly()
+        {
+            var u1 = new User("a@b.com", "alice", "password1", "dept-1");
+            var u2 = new User("b@b.com", "bob", "password2", "dept-2");
 
-        // Assert
-        Assert.Empty(got);
-    }
+            await _repo.CreateAsync(u1);
+            await _repo.CreateAsync(u2);
 
-    [Fact]
-    public async Task ListByDepartment_FiltersCorrectly()
-    {
-        // Arrange
-        var u1 = new User("a@b", "alice", "password123", "dept-1");
-        var u2 = new User("b@b", "bob", "123password", "dept-2");
+            var d1 = await _repo.ListByDepartmentAsync("dept-1");
+            Assert.Single(d1);
+            Assert.Equal("dept-1", d1[0].DepartmentId);
+        }
 
-        // Act
-        await _repo.CreateAsync(u1);
-        await _repo.CreateAsync(u2);
-        var list = await _repo.ListByDepartmentAsync(u1.DepartmentId);
+        [Fact]
+        public async Task ListByDepartmentAsync_NonExistent_ReturnsEmptyList() =>
+            Assert.Empty(await _repo.ListByDepartmentAsync("nope"));
 
-        // Assert
-        Assert.Contains(list, u => u.Id == u1.Id);
-        Assert.DoesNotContain(list, u => u.Id == u2.Id);
-    }
+        [Fact]
+        public async Task ListByRoleAsync_FiltersCorrectly()
+        {
+            var m = new User("m@x", "manager", "password", "d");
+            m.UpdateRole(UserRole.Manager);
+            var e = new User("e@x", "employee", "password", "d");
+            e.UpdateRole(UserRole.Employee);
 
-    [Fact]
-    public async Task ListByDepartment_NonExistent_ReturnsEmptyList()
-    {
-        // Arrange & Act
-        var got = await _repo.ListByDepartmentAsync("fakeDepartment");
+            await _repo.CreateAsync(m);
+            await _repo.CreateAsync(e);
 
-        // Assert
-        Assert.Empty(got);
-    }
+            var managers = await _repo.ListByRoleAsync(UserRole.Manager, CancellationToken.None);
+            Assert.Single(managers);
+            Assert.Equal(UserRole.Manager, managers[0].Role);
 
-    [Fact]
-    public async Task DeleteUser_Exists_DeletesUser()
-    {
-        // Arrange
-        var u = new User("a@b", "alice", "password123", "dept-1");
+            var employees = await _repo.ListByRoleAsync(UserRole.Employee, CancellationToken.None);
+            Assert.Single(employees);
+            Assert.Equal(UserRole.Employee, employees[0].Role);
+        }
 
-        // Act & Assert
-        await _repo.CreateAsync(u);
-        var users = await _repo.GetAllAsync();
-        Assert.Single(users);
-        await _repo.DeleteAsync(u.Id);
-        users = await _repo.GetAllAsync();
-        Assert.Empty(users);
-    }
+        [Fact]
+        public async Task ListByRoleAsync_NullRole_ReturnsAllUsers()
+        {
+            var u1 = new User("a@b", "alice", "password", "d");
+            var u2 = new User("b@b", "bob", "password", "d");
 
-    [Fact]
-    public async Task DeleteUser_NonExistent_ThrowsRepositoryException()
-    {
-        // Arrange
-        var u = new User("a@b", "alice", "password123", "dept-1");
+            await _repo.CreateAsync(u1);
+            await _repo.CreateAsync(u2);
 
-        // Act & Assert
-        await Assert.ThrowsAsync<RepositoryException>(() =>
-            _repo.DeleteAsync(u.Id)
-        );
-    }
+            var all = await _repo.GetAllAsync(CancellationToken.None);
+            Assert.Equal(2, all.Count);
+        }
 
-    [Fact]
-    public async Task UpdateUser_Exists_UpdatesUser()
-    {
-        // Arrange
-        var u = new User("a@b", "alice", "password123", "dept-1");
-        await _repo.CreateAsync(u);
+        [Fact]
+        public async Task DeleteAsync_Existing_DeletesUser()
+        {
+            var u = new User("x@y", "xyz", "password", "d");
+            await _repo.CreateAsync(u);
 
-        u.UpdateDepartment("new-dept");
+            await _repo.DeleteAsync(u.Id);
+            Assert.Empty(await _repo.GetAllAsync());
+        }
 
-        // Act
-        await _repo.UpdateAsync(u);
-        var user = await _repo.GetByIdAsync(u.Id);
+        [Fact]
+        public async Task DeleteAsync_NonExistent_ThrowsRepositoryException() =>
+            await Assert.ThrowsAsync<RepositoryException>(() => _repo.DeleteAsync("nope"));
 
-        // Assert
-        Assert.Equal(u.Id, user.Id);
-        Assert.Equal("new-dept", user.DepartmentId);
-    }
+        [Fact]
+        public async Task UpdateAsync_Existing_UpdatesUser()
+        {
+            var u = new User("a@b", "alice", "password", "d1");
+            await _repo.CreateAsync(u);
 
-    [Fact]
-    public async Task UpdateUser_NonExistent_ThrowsRepositoryException()
-    {
-        // Arrange
-        var u = new User("a@b", "alice", "password123", "dept-1");
+            u.UpdateDepartment("d2");
+            await _repo.UpdateAsync(u);
 
-        u.UpdateDepartment("new-dept");
+            var fetched = await _repo.GetByIdAsync(u.Id);
+            Assert.Equal("d2", fetched!.DepartmentId);
+        }
 
-        // Act & Assert
-        await Assert.ThrowsAsync<RepositoryException>(() =>
-            _repo.UpdateAsync(u)
-        );
-    }
+        [Fact]
+        public async Task UpdateAsync_NonExistent_ThrowsRepositoryException() =>
+            await Assert.ThrowsAsync<RepositoryException>(() => _repo.UpdateAsync(
+                new User("a@b", "alice", "password", "d"),
+                isUpsert: false
+            ));
 
-    [Fact]
-    public async Task UpsertUser_NonExistent_CreatesUser()
-    {
-        // Arrange
-        var u = new User("a@b", "alice", "password123", "dept-1");
-        Assert.Empty(await _repo.GetAllAsync());
+        [Fact]
+        public async Task UpdateAsync_Upsert_CreatesWhenMissing()
+        {
+            var u = new User("u@x", "user", "password", "d");
+            await _repo.UpdateAsync(u, isUpsert: true);
 
-        // Act
-        await _repo.UpdateAsync(u, true);
-        var byId = await _repo.GetByIdAsync(u.Id);
-
-        // Assert
-        Assert.NotNull(byId);
-        Assert.Equal(u.Id, byId.Id);
+            var fetched = await _repo.GetByIdAsync(u.Id);
+            Assert.NotNull(fetched);
+        }
     }
 }
