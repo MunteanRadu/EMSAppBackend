@@ -1,6 +1,6 @@
 ﻿namespace EMSApp.Application;
 
-public class DepartmentDto(
+public sealed record DepartmentDto(
     string Id,
     string Name,
     string ManagerId,

@@ -25,6 +25,7 @@ public class DepartmentRepository : IDepartmentRepository
 
     public async Task<Department?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
     {
+        Console.WriteLine($"Querying Department with id={id}");
         var filter = Builders<Department>.Filter.Eq(d => d.Id, id);
         var result = await _collection
             .Find(filter)
