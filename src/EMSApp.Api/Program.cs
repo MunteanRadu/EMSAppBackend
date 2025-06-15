@@ -74,11 +74,17 @@ builder.Services.AddInfrastructure();
 builder.Services.AddApplication();
 builder.Services.AddHostedService<LeaveCompletionOverdueTaskService>();
 
+var allowedOrigins = new[] 
+{
+    "http://localhost:4200",
+    "https://salmon-tree-0f985de03.6.azurestaticapps.net"
+};
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAngularDev", policy =>
+    options.AddPolicy("AllowFrontend", policy =>
       policy
-        .WithOrigins("http://localhost:4200")
+        .WithOrigins(allowedOrigins)
         .AllowAnyMethod()
         .AllowAnyHeader()
     );
@@ -168,23 +174,35 @@ builder.Services.AddAutoMapper(typeof(UserMappingProfile).Assembly);
 builder.Services.AddAutoMapper(typeof(AssignmentMappingProfile).Assembly);
 builder.Services.AddAutoMapper(typeof(AssignmentFeedbackMappingProfile).Assembly);
 
-var app = builder.Build();
 
-// 4) HTTP pipeline
-if (app.Environment.IsDevelopment())
+try
 {
-    app.UseDeveloperExceptionPage();
+    var app = builder.Build();
+
     app.UseSwagger();
     app.UseSwaggerUI();
+
+    // 4) HTTP pipeline
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseDeveloperExceptionPage();
+    }
+
+    app.UseHttpsRedirection();
+    app.UseCors("AllowFrontend");
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.MapControllers();
+
+    app.Run();
+}
+catch (Exception ex)
+{
+    Console.WriteLine("Application failed to start");
+    Console.WriteLine(ex.ToString());
+    throw;
 }
 
-app.UseHttpsRedirection();
-app.UseCors("AllowAngularDev");
-app.UseAuthentication();
-app.UseAuthorization();
-app.MapControllers();
-
-app.Run();
 
 /// <summary>
 /// Extension methods to wire up DI in Program.cs
