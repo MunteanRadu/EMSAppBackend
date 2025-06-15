@@ -11,6 +11,7 @@ public class UserProfile
     public string Phone { get; private set; }
     public string Address { get; private set; }
     public string EmergencyContact { get; private set; }
+    public string change {  get; private set; }
 
     public UserProfile() { }
 
