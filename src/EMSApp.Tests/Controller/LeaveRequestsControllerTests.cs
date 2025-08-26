@@ -68,7 +68,9 @@ namespace EMSApp.Tests
         public async Task GetById_Found_ReturnsDto()
         {
             // Arrange
-            var lr = new LeaveRequest("u2", LeaveType.Sick, DateOnly.Parse("2025-07-01"), DateOnly.Parse("2025-07-02"), "Ill");
+            var dateStart = DateOnly.FromDateTime(DateTime.Today);
+            var dateEnd = dateStart.AddDays(5);
+            var lr = new LeaveRequest("u2", LeaveType.Sick, dateStart, dateEnd, "Ill");
             var dto = new LeaveRequestDto(
                 lr.Id, lr.UserId, lr.Type, lr.StartDate, lr.EndDate,
                 lr.Reason, lr.Status, lr.ManagerId, lr.RequestedAt, lr.DecisionAt, lr.CompletedAt
@@ -102,7 +104,9 @@ namespace EMSApp.Tests
         public async Task Approve_Found_ReturnsOkDto()
         {
             // Arrange
-            var lr = new LeaveRequest("u3", LeaveType.Paid, DateOnly.Parse("2025-08-01"), DateOnly.Parse("2025-08-03"), "Trip");
+            var dateStart = DateOnly.FromDateTime(DateTime.Today);
+            var dateEnd = dateStart.AddDays(5);
+            var lr = new LeaveRequest("u3", LeaveType.Paid, dateStart, dateEnd, "Trip");
             _svc.Setup(s => s.GetByIdAsync(lr.Id, _ct)).ReturnsAsync(lr);
             var dto = new LeaveRequestDto(
                 lr.Id, lr.UserId, lr.Type, lr.StartDate, lr.EndDate,

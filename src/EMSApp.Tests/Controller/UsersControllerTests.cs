@@ -230,13 +230,13 @@ public class UsersControllerTests
         Assert.IsType<NoContentResult>(result);
 
         _svc.Setup(s => s.GetByIdAsync("u", _ct)).ReturnsAsync(user);
-        var upr = new UpdateUserProfileRequest {
-            Name = "NewName",
-            Age = 28, 
-            Phone = "0712345678", 
-            Address = "Address 1232", 
-            EmergencyContact = "0709876543"
-        };
+        var upr = new UpdateUserProfileRequest(
+            "NameName",
+            28, 
+            "0712345678", 
+            "Address 1232", 
+            "0709876543"
+        );
         var r2 = await _ctrl.UpdateProfile("u", upr, _ct);
         Assert.IsType<NoContentResult>(r2);
     }
