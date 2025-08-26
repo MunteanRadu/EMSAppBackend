@@ -87,7 +87,7 @@ namespace EMSApp.Tests
 
         [Theory]
         [InlineData(default)]
-        [InlineData("07:00")]  // before timeIn
+        [InlineData("07:00")]
         public void PunchOut_InvalidTimeOut_ThrowsDomainException(string timeOutStr)
         {
             var record = new PunchRecord("user-123", new DateOnly(2025, 4, 25), new TimeOnly(8, 0));

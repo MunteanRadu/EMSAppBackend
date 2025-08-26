@@ -2,8 +2,7 @@
 
 namespace EMSApp.Api;
 
-public sealed record RegisterRequest
-(
+public sealed record RegisterRequest(
     [Required]
     string Username,
     [Required, EmailAddress] 

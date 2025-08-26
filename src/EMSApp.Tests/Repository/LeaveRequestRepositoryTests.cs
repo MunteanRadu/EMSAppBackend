@@ -148,7 +148,6 @@ namespace EMSApp.Tests
         {
             var date = DateTime.UtcNow;
             int daysToAdd = ((int)DayOfWeek.Monday - (int)date.DayOfWeek + 7) % 7;
-            // If today is Monday, ((1 - 1 + 7) % 7) == 0, so we force next week
             if (daysToAdd == 0)
                 daysToAdd = 7;
             var monday = date.AddDays(daysToAdd);

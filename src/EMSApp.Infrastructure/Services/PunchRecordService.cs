@@ -63,10 +63,15 @@ public class PunchRecordService : IPunchRecordService
 
         var earliestAllowed = windowStart.Add(-policy.PunchInTolerance);
 
+        if (windowStart == TimeOnly.Parse("00:00:00"))
+        {
+            earliestAllowed = windowStart;
+        }
+
         if (time < earliestAllowed)
         {
             throw new DomainException(
-                $"Punch-in at {time} is befored allowed window {earliestAllowed}-{assignment.StartTime}");
+                $"Punch-in at {time} is befored allowed window {earliestAllowed}-{assignment.StartTime} !!!!!!!!!! start {windowStart} end {windowEnd} year {date.Year}");
         }
 
         var punchRecord = new PunchRecord(userId, date, time);
@@ -98,11 +103,15 @@ public class PunchRecordService : IPunchRecordService
         }
 
         var latestAllowed = windowEnd.Add(policy.PunchOutTolerance);
+        if (windowEnd == TimeOnly.Parse("23:59:59"))
+        {
+            latestAllowed = windowEnd;
+        }
 
         if (timeOut > latestAllowed)
         {
             throw new DomainException(
-                $"Punch-out at {timeOut} is after allowed window {assignment.EndTime}-{latestAllowed}");
+                $"Punch-out at {timeOut} is after allowed window {windowEnd}-{latestAllowed}");
         }
 
         var breaks = await _breakSessionRepository.ListByPunchRecordAsync(punchId, ct);

@@ -1,6 +1,6 @@
 ﻿namespace EMSApp.Api;
 
-public record class UpdateDepartmentRequest(
+public sealed record UpdateDepartmentRequest(
     string? Name,
     string? ManagerId
 );

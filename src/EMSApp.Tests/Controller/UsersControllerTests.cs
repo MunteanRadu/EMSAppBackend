@@ -229,7 +229,6 @@ public class UsersControllerTests
         var result = await _ctrl.Update("u", put, _ct);
         Assert.IsType<NoContentResult>(result);
 
-        // Profile separately
         _svc.Setup(s => s.GetByIdAsync("u", _ct)).ReturnsAsync(user);
         var upr = new UpdateUserProfileRequest {
             Name = "NewName",

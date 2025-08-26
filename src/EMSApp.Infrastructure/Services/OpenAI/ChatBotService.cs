@@ -2,12 +2,6 @@
 using System;
 using OpenAI;
 using OpenAI.Chat;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Data;
-using Intercom.Core;
-using System.ClientModel;
 
 namespace EMSApp.Infrastructure;
 

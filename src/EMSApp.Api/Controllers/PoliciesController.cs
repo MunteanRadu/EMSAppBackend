@@ -96,7 +96,6 @@ public class PoliciesController : ControllerBase
         if (req.MaxSingleBreak is not null) p.SetBreakRules(req.MaxSingleBreak.Value, p.MaxTotalBreakPerDay);
         if (req.MaxTotalBreakPerDay is not null) p.SetBreakRules(p.MaxSingleBreak, req.MaxTotalBreakPerDay.Value);
         if (req.OvertimeMultiplier is not null) p.SetOvertimeMultiplier(req.OvertimeMultiplier.Value);
-        //if (req.LeaveQuotas is not null) p.SetLeaveQuotas(req.LeaveQuotas);
 
         await _service.UpdateAsync(p, ct);
         return NoContent();

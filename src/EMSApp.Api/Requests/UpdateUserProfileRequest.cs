@@ -1,10 +1,10 @@
 ﻿namespace EMSApp.Api;
 
-public class UpdateUserProfileRequest
-{
-    public string? Name { get; init; }
-    public int? Age { get; init; }
-    public string? Phone { get; init; }
-    public string? Address { get; init; }
-    public string? EmergencyContact { get; init; }
-}
+public sealed record UpdateUserProfileRequest(
+    string? Name,
+    int? Age,
+    string? Phone,
+    string? Address,
+    string? EmergencyContact
+);
+    

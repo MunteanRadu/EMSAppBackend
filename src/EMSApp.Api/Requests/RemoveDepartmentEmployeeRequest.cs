@@ -1,5 +1,5 @@
 ﻿namespace EMSApp.Api;
 
-public record RemoveDepartmentEmployeeRequest(
+public sealed record RemoveDepartmentEmployeeRequest(
     string UserId
 );

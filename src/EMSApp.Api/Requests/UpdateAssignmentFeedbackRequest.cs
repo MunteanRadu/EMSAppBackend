@@ -2,7 +2,7 @@
 
 namespace EMSApp.Api;
 
-public record class UpdateAssignmentFeedbackRequest(
+public sealed record UpdateAssignmentFeedbackRequest(
     string? Text
 );
     

@@ -37,7 +37,6 @@ namespace EMSApp.Tests
             Assert.Null(session.EndTime);
             Assert.Null(session.Duration);
 
-            // Finish session
             session.End(end);
 
             // Assert

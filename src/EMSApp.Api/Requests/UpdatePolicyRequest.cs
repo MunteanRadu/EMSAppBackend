@@ -2,7 +2,7 @@
 
 namespace EMSApp.Api;
 
-public record class UpdatePolicyRequest
+public sealed record UpdatePolicyRequest
 {
     public TimeOnly? WorkDayStart { get; init; }
     public TimeOnly? WorkDayEnd { get; init; }
@@ -11,5 +11,4 @@ public record class UpdatePolicyRequest
     public TimeSpan? MaxSingleBreak { get; init; }
     public TimeSpan? MaxTotalBreakPerDay { get; init; }
     public decimal? OvertimeMultiplier { get; init; }
-    //public IDictionary<LeaveType, int>? LeaveQuotas { get; init; }
 }

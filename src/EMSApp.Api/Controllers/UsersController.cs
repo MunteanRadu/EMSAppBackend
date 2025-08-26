@@ -176,7 +176,6 @@ public class UsersController : ControllerBase
         if (req.DepartmentId is not null) user.UpdateDepartment(req.DepartmentId);
         if (req.Salary is not null) user.UpdateSalary((decimal)req.Salary, "admin");
         if(req.JobTitle is not null) user.UpdateJobTitle(req.JobTitle);
-        //if (req.Profile is not null) user.UpdateProfile(_mapper.Map<UserProfileDto>(req.Profile));
         if (req.Role is not null) user.UpdateRole((UserRole)req.Role);
 
         await _service.UpdateAsync(user, ct);

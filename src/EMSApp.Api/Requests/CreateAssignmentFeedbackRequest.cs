@@ -2,7 +2,7 @@
 
 namespace EMSApp.Api;
 
-public record class CreateAssignmentFeedbackRequest(
+public sealed record CreateAssignmentFeedbackRequest(
     string AssignmentId,
     string UserId,
     string Text,

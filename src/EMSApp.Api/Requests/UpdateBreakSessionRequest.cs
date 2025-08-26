@@ -1,5 +1,5 @@
 ﻿namespace EMSApp.Api;
 
-public record class UpdateBreakSessionRequest(
+public sealed record UpdateBreakSessionRequest(
     TimeOnly EndTime
 );

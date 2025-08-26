@@ -1,5 +1,5 @@
 ﻿namespace EMSApp.Api;
 
-public record CreateBreakSessionRequest(
+public sealed record CreateBreakSessionRequest(
     TimeOnly StartTime
 );

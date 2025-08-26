@@ -140,10 +140,10 @@ namespace EMSApp.Tests
             // Act
             var action = await _ctrl.GetById(PunchId, badDto.Id, _ct);
 
-            // Assert: wrong punchId route
+            // Assert
             Assert.IsType<NotFoundResult>(action.Result);
 
-            // Arrange: service returns null
+            // Arrange
             _svc.Setup(s => s.GetByIdAsync("nope", _ct)).ReturnsAsync((BreakSessionDto?)null);
             var action2 = await _ctrl.GetById(PunchId, "nope", _ct);
             Assert.IsType<NotFoundResult>(action2.Result);

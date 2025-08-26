@@ -1,5 +1,5 @@
 ﻿namespace EMSApp.Api;
 
-public record AddScheduleExceptionRequest(
+public sealed record AddScheduleExceptionRequest(
     DateOnly ExceptionDate
 );

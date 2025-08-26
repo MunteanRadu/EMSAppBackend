@@ -2,8 +2,7 @@
 
 namespace EMSApp.Api;
 
-public sealed record LoginRequest
-(
+public sealed record LoginRequest(
     [Required] string Username,
     [Required] string Password
 );

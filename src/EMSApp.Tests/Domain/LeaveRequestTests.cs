@@ -25,7 +25,7 @@ namespace EMSApp.Tests
         [Fact]
         public void Constructor_ValidParameters_CreatesLeaveRequest()
         {
-            // Arrange: start tomorrow, end after
+            // Arrange
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
             var start = today.AddDays(1);
             var end = start.AddDays(5);

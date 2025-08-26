@@ -2,7 +2,7 @@
 
 namespace EMSApp.Api;
 
-public record CreateScheduleRequest(
+public sealed record CreateScheduleRequest(
     string DepartmentId,
     string ManagerId,
     ShiftType ShiftType,

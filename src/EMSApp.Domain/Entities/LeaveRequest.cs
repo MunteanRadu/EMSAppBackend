@@ -105,7 +105,6 @@ public class LeaveRequest
 
     private void ValidateManager(string managerId)
     {
-        // Manager Id validation
         if (string.IsNullOrWhiteSpace(managerId))
             throw new DomainException("Manager Id cannot be empty");
     }

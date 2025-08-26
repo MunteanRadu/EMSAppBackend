@@ -1,3 +1,3 @@
 ﻿namespace EMSApp.Api;
 
-public record class UpdateSalaryRequest(decimal Salary);
+public sealed record UpdateSalaryRequest(decimal Salary);

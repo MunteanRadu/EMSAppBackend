@@ -1,6 +1,6 @@
 ﻿namespace EMSApp.Api;
 
-public record CreateUserRequest(
+public sealed record CreateUserRequest(
     string Email,
     string Username,
     string PasswordHash,

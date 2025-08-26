@@ -31,11 +31,6 @@ namespace EMSApp.Tests
             _service = new LeaveRequestService(_repo.Object, _policySvc.Object, _userRepo.Object);
         }
 
-        private static IDictionary<LeaveType, int> Quotas() =>
-            Enum.GetValues<LeaveType>()
-                .Cast<LeaveType>()
-                .ToDictionary(lt => lt, _ => 10);
-
         [Fact]
         public async Task CreateAsync_UserNotFound_Throws()
         {
@@ -104,7 +99,7 @@ namespace EMSApp.Tests
                 new TimeOnly(9, 0), new TimeOnly(17, 0),
                 TimeSpan.FromMinutes(15), TimeSpan.FromMinutes(10),
                 TimeSpan.FromMinutes(30), TimeSpan.FromHours(2),
-                1m, Quotas());
+                1m, GetQuotas());
             _policySvc.Setup(s => s.GetByYearAsync(2025, _ct)).ReturnsAsync(policy);
 
             _repo.Setup(r => r.FilterByAsync(It.IsAny<Expression<Func<LeaveRequest, bool>>>(), _ct))

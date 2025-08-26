@@ -1,5 +1,5 @@
 ﻿namespace EMSApp.Api;
 
-public record CreateDepartmentRequest(
+public sealed record CreateDepartmentRequest(
     string Name
 );

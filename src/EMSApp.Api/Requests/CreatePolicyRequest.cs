@@ -2,7 +2,7 @@
 
 namespace EMSApp.Api;
 
-public record CreatePolicyRequest(
+public sealed record CreatePolicyRequest(
     int Year,
     TimeOnly WorkDayStart,
     TimeOnly WorkDayEnd,

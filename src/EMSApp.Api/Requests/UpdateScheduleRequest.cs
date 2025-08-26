@@ -2,7 +2,7 @@
 
 namespace EMSApp.Api;
 
-public record class UpdateScheduleRequest(
+public sealed record UpdateScheduleRequest(
     TimeOnly? StartTime,
     TimeOnly? EndTime,
     ShiftType ShiftType,

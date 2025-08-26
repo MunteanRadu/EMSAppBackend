@@ -303,10 +303,4 @@ namespace EMSApp.Tests
             _svc.Verify(s => s.DeleteAsync("x1", _ct), Times.Once);
         }
     }
-
-    // helper to cast IEnumerable to List for counting in test
-    internal static class EnumerableExtensions
-    {
-        public static List<T> AsList<T>(this IEnumerable<T> src) => new(src);
-    }
 }

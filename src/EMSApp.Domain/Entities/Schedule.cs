@@ -2,9 +2,6 @@
 
 namespace EMSApp.Domain;
 
-/// <summary>
-/// A repeating weekly shift for a department, owned by a manager
-/// </summary>
 public class Schedule
 {
     public string Id { get; private set; }
@@ -53,9 +50,6 @@ public class Schedule
         IsWorkingDay = isWorkingDay;
     }
 
-    /// <summary>
-    /// Updates shift start, end and isWorkingDay parameters
-    /// </summary>
     public void UpdateShift(ShiftType newShift, TimeOnly newStart, TimeOnly newEnd, bool isWorkingDay)
     {
         if (string.IsNullOrWhiteSpace(DepartmentId) || string.IsNullOrWhiteSpace(ManagerId))

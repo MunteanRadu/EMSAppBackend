@@ -1,5 +1,5 @@
 ﻿namespace EMSApp.Api;
 
-public record AddDepartmentEmployeeRequest(
+public sealed record AddDepartmentEmployeeRequest(
     string UserId
 );

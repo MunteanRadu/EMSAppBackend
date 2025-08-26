@@ -1,3 +1,3 @@
 ﻿namespace EMSApp.Api;
 
-public record class UpdateJobTitleRequest(string JobTitle);
+public sealed record UpdateJobTitleRequest(string JobTitle);

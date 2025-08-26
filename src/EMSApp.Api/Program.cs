@@ -49,7 +49,6 @@ builder.Services.AddSingleton<OpenAIClient>(sp =>
     return new OpenAIClient(openAIOptions.ApiKey);
 });
 
-// Simplified ChatClient registration
 builder.Services.AddScoped<ChatClient>(sp => {
     var client = sp.GetRequiredService<OpenAIClient>();
     var settings = sp.GetRequiredService<IOptions<OpenAISettings>>().Value;
@@ -91,7 +90,6 @@ builder.Services.AddCors(options =>
 });
 
 // Authentication & Authorization
-
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -182,7 +180,6 @@ try
     app.UseSwagger();
     app.UseSwaggerUI();
 
-    // 4) HTTP pipeline
     if (app.Environment.IsDevelopment())
     {
         app.UseDeveloperExceptionPage();
@@ -217,7 +214,6 @@ public static class StartupExtensions
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
-        // register all I*Service / implementations
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IPunchRecordService, PunchRecordService>();
         services.AddScoped<IScheduleService, ScheduleService>();
@@ -237,10 +233,8 @@ public static class StartupExtensions
 
     public static IServiceCollection AddInfrastructure(this IServiceCollection services)
     {
-        // MongoDbContext
         services.AddScoped<IMongoDbContext, MongoDbContext>();
 
-        // register all I*Repository / implementations
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IPunchRecordRepository, PunchRecordRepository>();
         services.AddScoped<IScheduleRepository, ScheduleRepository>();

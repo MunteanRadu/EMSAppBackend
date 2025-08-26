@@ -1,6 +1,6 @@
 ﻿namespace EMSApp.Api;
 
-public record CreateUserProfileRequest(
+public sealed record CreateUserProfileRequest(
     string Name,
     int Age,
     string Phone,
