@@ -178,7 +178,11 @@ try
     var app = builder.Build();
 
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "EMSApp API v1");
+        c.RoutePrefix = string.Empty;
+    });
 
     if (app.Environment.IsDevelopment())
     {
