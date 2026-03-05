@@ -182,13 +182,6 @@ try
     {
         app.UseDeveloperExceptionPage();
     }
-
-    app.UseHttpsRedirection();
-    app.UseCors("AllowFrontend");
-    app.UseAuthentication();
-    app.UseAuthorization();
-    app.MapControllers();
-
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
@@ -196,6 +189,10 @@ try
         c.RoutePrefix = "swagger";
     });
 
+    app.UseCors("AllowFrontend");
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.MapControllers();
     app.MapGet("/", () => Results.Redirect("/swagger"));
 
     app.Run();
