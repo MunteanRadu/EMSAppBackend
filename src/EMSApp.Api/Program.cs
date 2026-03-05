@@ -196,6 +196,8 @@ try
         c.RoutePrefix = "swagger";
     });
 
+    app.MapGet("/", () => Results.Redirect("/swagger"));
+
     app.Run();
 }
 catch (Exception ex)
