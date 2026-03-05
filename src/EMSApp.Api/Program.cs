@@ -76,7 +76,7 @@ builder.Services.AddHostedService<LeaveCompletionOverdueTaskService>();
 var allowedOrigins = new[] 
 {
     "http://localhost:4200",
-    "https://salmon-tree-0f985de03.6.azurestaticapps.net"
+    "https://brave-smoke-09f2aca10.6.azurestaticapps.net"
 };
 
 builder.Services.AddCors(options =>
